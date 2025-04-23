@@ -57,6 +57,168 @@ export default function Home() {
       .replace(/'/g, "&#039;");
   };
   
+  // CBOR major type tags
+  const CBOR_TYPES = {
+    UNSIGNED_INT: 0,
+    NEGATIVE_INT: 1,
+    BYTE_STRING: 2,
+    TEXT_STRING: 3,
+    ARRAY: 4,
+    MAP: 5,
+    TAG: 6,
+    SIMPLE_AND_FLOAT: 7
+  };
+  
+  // Simple CBOR decoder function (supports basic types, assuming valid CBOR)
+  const decodeCBOR = (buffer: ArrayBuffer): any => {
+    const bytes = new Uint8Array(buffer);
+    let position = 0;
+    
+    function readByte(): number {
+      return bytes[position++];
+    }
+    
+    function readLength(initialByte: number): number {
+      const additionalInfo = initialByte & 0x1f;
+      
+      if (additionalInfo < 24) {
+        return additionalInfo;
+      } else if (additionalInfo === 24) {
+        return readByte();
+      } else if (additionalInfo === 25) {
+        return (readByte() << 8) | readByte();
+      } else if (additionalInfo === 26) {
+        return (readByte() << 24) | (readByte() << 16) | (readByte() << 8) | readByte();
+      } else if (additionalInfo === 27) {
+        // This is a simplification for JavaScript as it doesn't handle 64-bit integers well
+        return ((readByte() << 24) | (readByte() << 16) | (readByte() << 8) | readByte()) * Math.pow(2, 32) + 
+               ((readByte() << 24) | (readByte() << 16) | (readByte() << 8) | readByte());
+      }
+      
+      throw new Error(`Unsupported length encoding: ${additionalInfo}`);
+    }
+    
+    function readByteString(length: number): Uint8Array {
+      const result = bytes.slice(position, position + length);
+      position += length;
+      return result;
+    }
+    
+    function readTextString(length: number): string {
+      const byteString = readByteString(length);
+      return new TextDecoder().decode(byteString);
+    }
+    
+    function decode(): any {
+      const initialByte = readByte();
+      const majorType = initialByte >> 5;
+      const length = readLength(initialByte);
+      
+      switch (majorType) {
+        case CBOR_TYPES.UNSIGNED_INT:
+          return length;
+          
+        case CBOR_TYPES.NEGATIVE_INT:
+          return -1 - length;
+          
+        case CBOR_TYPES.BYTE_STRING:
+          // Convert byte string to hex string for better display
+          const byteStr = readByteString(length);
+          return Array.from(byteStr)
+            .map(byte => byte.toString(16).padStart(2, '0'))
+            .join('');
+          
+        case CBOR_TYPES.TEXT_STRING:
+          return readTextString(length);
+          
+        case CBOR_TYPES.ARRAY:
+          const array = [];
+          for (let i = 0; i < length; i++) {
+            array.push(decode());
+          }
+          return array;
+          
+        case CBOR_TYPES.MAP:
+          const map: Record<string, any> = {};
+          for (let i = 0; i < length; i++) {
+            const key = decode();
+            map[key.toString()] = decode();
+          }
+          return map;
+          
+        case CBOR_TYPES.TAG:
+          return {
+            tag: length,
+            value: decode()
+          };
+          
+        case CBOR_TYPES.SIMPLE_AND_FLOAT:
+          if (length === 20) return false;
+          if (length === 21) return true;
+          if (length === 22) return null;
+          if (length === 23) return undefined;
+          if (length === 25) {
+            // 16-bit float (simplified)
+            return "FLOAT16_UNSUPPORTED";
+          }
+          if (length === 26) {
+            // 32-bit float
+            const float32arr = new Float32Array(bytes.buffer.slice(position, position + 4));
+            position += 4;
+            return float32arr[0];
+          }
+          if (length === 27) {
+            // 64-bit float
+            const float64arr = new Float64Array(bytes.buffer.slice(position, position + 8));
+            position += 8;
+            return float64arr[0];
+          }
+          return length;
+          
+        default:
+          throw new Error(`Unsupported CBOR major type: ${majorType}`);
+      }
+    }
+    
+    return decode();
+  };
+  
+  // Attempt to decode metadata which might be CBOR format
+  const decodeMetadata = (buffer: ArrayBuffer | string): string => {
+    try {
+      // If it's a string, try to convert it to a buffer first
+      if (typeof buffer === 'string') {
+        const str = buffer;
+        // Handle binary string
+        if (/^[\x00-\xFF]*$/.test(str)) {
+          const bytes = new Uint8Array(str.length);
+          for (let i = 0; i < str.length; i++) {
+            bytes[i] = str.charCodeAt(i);
+          }
+          buffer = bytes.buffer;
+        } else {
+          return buffer; // If not a binary string, return as is
+        }
+      }
+      
+      // Try to decode as CBOR
+      const decoded = decodeCBOR(buffer);
+      return JSON.stringify(decoded, null, 2);
+    } catch (error) {
+      console.error("Failed to decode CBOR:", error);
+      
+      // Return original data if it can't be parsed
+      if (typeof buffer === 'string') {
+        return buffer;
+      } else {
+        const bytes = new Uint8Array(buffer);
+        return Array.from(bytes)
+          .map(byte => byte.toString(16).padStart(2, '0'))
+          .join('');
+      }
+    }
+  };
+  
   // Format JSON with syntax highlighting
   const formatJsonOutput = (jsonString: string): string => {
     return escapeHtml(jsonString)
@@ -248,19 +410,31 @@ export default function Home() {
             response = await fetch(url);
             
             if (response.ok) {
-              // First try to get metadata as JSON
-              const text = await response.text();
-              if (!text || text.trim() === "") {
+              // Get the response as an ArrayBuffer to handle binary formats like CBOR
+              const buffer = await response.arrayBuffer();
+              if (!buffer || buffer.byteLength === 0) {
                 appendToConsole("METADATA: No metadata available for this inscription", "system");
               } else {
                 appendToConsole("METADATA:", "success");
+                
                 try {
-                  // Try to parse as JSON first
-                  const jsonData = JSON.parse(text);
-                  appendToConsole(JSON.stringify(jsonData, null, 2), "json");
-                } catch (parseError) {
-                  // If not JSON, just display the raw text
-                  appendToConsole(text, "default");
+                  // Try first as JSON
+                  const text = new TextDecoder().decode(buffer);
+                  try {
+                    const jsonData = JSON.parse(text);
+                    appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+                  } catch (jsonError) {
+                    // Not JSON, try CBOR
+                    try {
+                      const decodedMetadata = decodeMetadata(buffer);
+                      appendToConsole(decodedMetadata, "json");
+                    } catch (cborError) {
+                      // If neither JSON nor CBOR, display as text
+                      appendToConsole(text, "default");
+                    }
+                  }
+                } catch (error) {
+                  appendToConsole(`Error decoding metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
                 }
               }
             } else {
@@ -298,19 +472,31 @@ export default function Home() {
           response = await fetch(url);
           
           if (response.ok) {
-            // Get the text content of the metadata
-            const text = await response.text();
-            if (!text || text.trim() === "") {
+            // Get the response as an ArrayBuffer to handle binary formats like CBOR
+            const buffer = await response.arrayBuffer();
+            if (!buffer || buffer.byteLength === 0) {
               appendToConsole("No metadata available for this inscription", "system");
             } else {
               appendToConsole("METADATA:", "success");
+              
               try {
-                // Try to parse as JSON first
-                const jsonData = JSON.parse(text);
-                appendToConsole(JSON.stringify(jsonData, null, 2), "json");
-              } catch (parseError) {
-                // If not JSON, just display the raw text
-                appendToConsole(text, "default");
+                // Try first as JSON
+                const text = new TextDecoder().decode(buffer);
+                try {
+                  const jsonData = JSON.parse(text);
+                  appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+                } catch (jsonError) {
+                  // Not JSON, try CBOR
+                  try {
+                    const decodedMetadata = decodeMetadata(buffer);
+                    appendToConsole(decodedMetadata, "json");
+                  } catch (cborError) {
+                    // If neither JSON nor CBOR, display as text
+                    appendToConsole(text, "default");
+                  }
+                }
+              } catch (error) {
+                appendToConsole(`Error decoding metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
               }
             }
           } else {
