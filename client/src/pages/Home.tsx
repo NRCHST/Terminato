@@ -72,12 +72,96 @@ export default function Home() {
   // Function to convert hex to text for Ordinals metadata
   const hexToText = (hex: string): string => {
     // For Ordinals metadata, the first few bytes might be a prefix we want to skip
-    // Check if the hex string starts with "784b21" (which is "xK!" in ASCII)
-    if (hex.startsWith("784b21")) {
-      // Skip the "784b21" prefix - this is specific to Ordinals metadata format
+    // Known prefixes in Ordinals metadata:
+    if (hex.startsWith("784b21")) { // "xK!" prefix
       hex = hex.substring(6);
+    } else if (hex.startsWith("ac6c")) { // For inscription b1ef66c...
+      // This specific inscription is a CBOR-like format, try to parse it
+      try {
+        // We'll extract key-value pairs from the hex
+        let result: Record<string, any> = {};
+        let i = 0;
+        
+        // Skip the first 4 characters (ac6c) as it's likely a header
+        i = 4;
+        
+        while (i < hex.length) {
+          // Read the key length (assuming it's a single hex byte for length)
+          const keyLengthHex = hex.substr(i, 2);
+          i += 2;
+          const keyLength = parseInt(keyLengthHex, 16);
+          
+          // Read the key
+          const keyHex = hex.substr(i, keyLength * 2);
+          i += keyLength * 2;
+          let key = '';
+          for (let j = 0; j < keyHex.length; j += 2) {
+            key += String.fromCharCode(parseInt(keyHex.substr(j, 2), 16));
+          }
+          
+          // Read the value type and length
+          const valueTypeLengthHex = hex.substr(i, 2);
+          i += 2;
+          const valueTypeLength = parseInt(valueTypeLengthHex, 16);
+          
+          // Read the value
+          let value: string | number | string[] = '';
+          
+          // Check if it's an array
+          if (valueTypeLength === 0x82 || valueTypeLength === 0x83 || valueTypeLength === 0x87) {
+            // It's an array, read multiple values
+            const arraySize = valueTypeLength & 0x0F; // Extract the array size
+            const values: string[] = [];
+            
+            for (let k = 0; k < arraySize; k++) {
+              // Get string length for each array element
+              const elemLengthHex = hex.substr(i, 2);
+              i += 2;
+              const elemLength = parseInt(elemLengthHex, 16);
+              
+              // Get the string value
+              const elemHex = hex.substr(i, elemLength * 2);
+              i += elemLength * 2;
+              let elem = '';
+              for (let j = 0; j < elemHex.length; j += 2) {
+                elem += String.fromCharCode(parseInt(elemHex.substr(j, 2), 16));
+              }
+              values.push(elem);
+            }
+            value = values;
+          } else if ((valueTypeLength & 0xE0) === 0) {
+            // It's a string with length embedded in the type
+            const valueLength = valueTypeLength;
+            const valueHex = hex.substr(i, valueLength * 2);
+            i += valueLength * 2;
+            
+            for (let j = 0; j < valueHex.length; j += 2) {
+              value += String.fromCharCode(parseInt(valueHex.substr(j, 2), 16));
+            }
+          } else if (valueTypeLength === 0x19) {
+            // It's a number
+            const numHex = hex.substr(i, 4);
+            i += 4;
+            value = parseInt(numHex, 16);
+          } else {
+            // Skip unknown type
+            // For simplicity, we just consume the next byte and continue
+            i += 2;
+            continue;
+          }
+          
+          result[key] = value;
+        }
+        
+        // Convert the result object to a JSON string
+        return JSON.stringify(result, null, 2);
+      } catch (e) {
+        console.error("Failed to parse custom metadata format:", e);
+        // Fall through to the standard hex decoder
+      }
     }
     
+    // Standard hex to text conversion
     let str = '';
     for (let i = 0; i < hex.length; i += 2) {
       const hexValue = parseInt(hex.substr(i, 2), 16);
