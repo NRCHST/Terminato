@@ -553,28 +553,37 @@ export default function Home() {
           await loadDistrictPage(page);
         }
         
-        // Regardless of data availability, have a deterministic pattern
-        // This ensures every district number will return a valid sat number
+        // First attempt to use the real data from the loaded page
         let value;
         
-        if (page === 0) {
-          value = 1000000 + (index * 3);
-          console.log(`Using pattern value for page 0: ${value}`);
-        } else if (page === 1) {
-          value = 5000000 + (index * 3);
-          console.log(`Using pattern value for page 1: ${value}`);
-        } else if (page === 8 && 
-                  ociData.loadedPages[pageKey] && 
-                  Array.isArray(ociData.loadedPages[pageKey]) && 
-                  ociData.loadedPages[pageKey].length > 0 &&
-                  ociData.loadedPages[pageKey][index]) {
-          // Page 8 is special and seems to work well with real data
+        // Check if we have valid data in the loaded page
+        if (ociData.loadedPages[pageKey] && 
+            Array.isArray(ociData.loadedPages[pageKey]) && 
+            ociData.loadedPages[pageKey].length > 0 &&
+            ociData.loadedPages[pageKey][index] && 
+            ociData.loadedPages[pageKey][index] > 0) {
+            
+          // Use actual loaded data
           value = ociData.loadedPages[pageKey][index];
-          console.log(`Using actual data for page 8: ${value}`);
-        } else {
-          // For other pages, calculate a deterministic value
-          value = 1000000 + (page * 100000) + (index * 2);
-          console.log(`Using pattern value for page ${page}: ${value}`);
+          console.log(`Using actual data for page ${page}: ${value}`);
+        }
+        // Otherwise, fallback to deterministic pattern
+        else {
+          if (page === 0) {
+            value = 1000000 + (index * 3);
+            console.log(`Using fallback pattern for page 0: ${value}`);
+          } else if (page === 1) {
+            value = 5000000 + (index * 3);
+            console.log(`Using fallback pattern for page 1: ${value}`);
+          } else if (page === 8) {
+            // Special case for page 8 - should only happen if data is missing
+            value = 1800000000 + (index * 1000);
+            console.log(`Using fallback pattern for page 8: ${value}`);
+          } else {
+            // For pages 2-7, create a deterministic pattern
+            value = 1000000 + (page * 100000) + (index * 2);
+            console.log(`Using fallback pattern for page ${page}: ${value}`);
+          }
         }
         
         console.log(`Final value for district ${districtNumber}: ${value}`);
