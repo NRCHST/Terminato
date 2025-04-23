@@ -545,7 +545,16 @@ export default function Home() {
                   if (/^[0-9a-fA-F]+$/.test(hexString)) {
                     // Convert hex to text
                     const decoded = hexToText(hexString);
-                    appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                    
+                    // Check if the decoded result is valid JSON
+                    try {
+                      const jsonObj = JSON.parse(decoded);
+                      appendToConsole("METADATA (JSON):", "success");
+                      appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
+                    } catch (jsonError) {
+                      // Not JSON, just show as decoded text
+                      appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                    }
                   } else {
                     // Try CBOR as fallback
                     try {
