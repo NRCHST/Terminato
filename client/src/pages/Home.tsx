@@ -471,7 +471,7 @@ export default function Home() {
     INSCRIPTION: {
       description: "Query inscription data.",
       usage: "INSCRIPTION <inscription_id> [ALL|CONTENT|UNDELEGATED|INFO|METADATA|PARENTS|CHILDREN]",
-      details: "INSCRIPTION <inscription_id> : This is the main command, resolves ALL by default\nINSCRIPTION <inscription_id> ALL : Returns content, info, metadata\nINSCRIPTION <inscription_id> CONTENT : Return content only of inscription\nINSCRIPTION <inscription_id> UNDELEGATED : Return undelegated content of inscription\nINSCRIPTION <inscription_id> INFO : Return inscription info\nINSCRIPTION <inscription_id> METADATA : Returns inscription METADATA\nINSCRIPTION <inscription_id> PARENTS : Returns inscription PARENTS\nINSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN",
+      details: "INSCRIPTION <inscription_id> : This is the main command, resolves ALL by default\nINSCRIPTION <inscription_id> ALL : Returns content, undelegated content, inscription info, metadata, inscriptions on sat, parents, children\nINSCRIPTION <inscription_id> CONTENT : Return content only of inscription\nINSCRIPTION <inscription_id> UNDELEGATED : Return undelegated content of inscription\nINSCRIPTION <inscription_id> INFO : Return inscription info\nINSCRIPTION <inscription_id> METADATA : Returns inscription METADATA\nINSCRIPTION <inscription_id> PARENTS : Returns inscription PARENTS\nINSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN",
       handler: handleInscription
     },
     SAT: {
