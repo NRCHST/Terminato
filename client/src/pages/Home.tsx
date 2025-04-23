@@ -253,41 +253,6 @@ export default function Home() {
       .replace(/\b(\d+)\b/g, '<span class="text-green-400">$1</span>');
   };
   
-  // Format ordinals metadata string with key-value pairs
-  const formatMetadataString = (metadata: string): string => {
-    // Special case for Ordinals metadata (example: "PHOTOGRAPHER:PARKER DAY|CAMERA:CANON EOS-1V...")
-    try {
-      // For the specific formatting in the screenshot, we need to detect key-value pairs
-      // that are structured as KEY:VALUE with possible spaces
-      
-      // First, try to identify if this is a typical Ordinals metadata string
-      // with multiple key:value pairs separated by spaces or special characters
-      
-      // Different patterns we might see:
-      // 1. KEY:VALUE KEY2:VALUE2 (space separated)
-      // 2. KEY:VALUE|KEY2:VALUE2 (pipe separated)
-      // 3. KEY:VALUE;KEY2:VALUE2 (semicolon separated)
-      
-      // Replace common separators with a standard one
-      let normalized = metadata.replace(/\s*\|\s*/g, '\n').replace(/\s*;\s*/g, '\n');
-      
-      // Look for patterns where we have multiple "word:word" sequences
-      const keyValuePattern = /\b([A-Z0-9]+):([\w\s.,/()%&'"-]+)(?=\s+[A-Z0-9]+:|$)/g;
-      
-      // Format to highlight the keys and values
-      const formattedContent = normalized.replace(keyValuePattern, (match, key, value) => {
-        return `<span class="text-blue-400">${escapeHtml(key)}</span>: <span class="text-green-400">${escapeHtml(value.trim())}</span>\n`;
-      });
-      
-      // Return the formatted string with line breaks
-      return formattedContent.trim().replace(/\n/g, '<br />');
-    } catch (error) {
-      // In case of error, return the original string
-      console.error("Error formatting metadata:", error);
-      return escapeHtml(metadata);
-    }
-  };
-  
   // Handle command input
   const handleCommandInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !isProcessing) {
@@ -581,24 +546,14 @@ export default function Home() {
                     // Convert hex to text
                     const decoded = hexToText(hexString);
                     
-                    // First check if it's a typical Ordinals metadata with key-value pairs
-                    if (decoded.includes(':') && !decoded.includes('{') && !decoded.includes('[')) {
-                      // This looks like Ordinals metadata with key-value pairs
-                      appendToConsole("METADATA (Formatted):", "success");
-                      
-                      // Format into a more readable structure with each key-value on a new line
-                      const formattedText = formatMetadataString(decoded);
-                      appendToConsole(formattedText, "default");
-                    } else {
-                      // Check if the decoded result is valid JSON
-                      try {
-                        const jsonObj = JSON.parse(decoded);
-                        appendToConsole("METADATA (JSON):", "success");
-                        appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
-                      } catch (jsonError) {
-                        // Not JSON, just show as decoded text
-                        appendToConsole(`Hex Decoded: ${decoded}`, "success");
-                      }
+                    // Check if the decoded result is valid JSON
+                    try {
+                      const jsonObj = JSON.parse(decoded);
+                      appendToConsole("METADATA (JSON):", "success");
+                      appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
+                    } catch (jsonError) {
+                      // Not JSON, just show as decoded text
+                      appendToConsole(`Hex Decoded: ${decoded}`, "success");
                     }
                   } else {
                     // Try CBOR as fallback
@@ -873,12 +828,7 @@ export default function Home() {
               }
               break;
             default:
-              // Check if this entry contains HTML (from formatted metadata)
-              if (entry.text.includes('<span') && entry.text.includes('</span>')) {
-                content = <span className="text-[#E0E0E0] whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: entry.text }} />;
-              } else {
-                content = <span className="text-[#E0E0E0]">{entry.text}</span>;
-              }
+              content = <span className="text-[#E0E0E0]">{entry.text}</span>;
           }
           
           return (
