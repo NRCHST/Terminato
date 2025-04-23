@@ -32,9 +32,19 @@ export default function Home() {
   
   // Keep the console scrolled to the bottom
   useEffect(() => {
+    // Scroll immediately
     if (consoleRef.current) {
       consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
     }
+    
+    // Also scroll after a slight delay to ensure all DOM updates are complete
+    const scrollTimer = setTimeout(() => {
+      if (consoleRef.current) {
+        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+      }
+    }, 10);
+    
+    return () => clearTimeout(scrollTimer);
   }, [consoleEntries]);
   
   // Focus the input when the component mounts and auto-detect mode
@@ -134,6 +144,13 @@ export default function Home() {
   // Append text to the console
   const appendToConsole = (text: string, type: ConsoleEntryType = "default") => {
     setConsoleEntries(prev => [...prev, { text, type }]);
+    
+    // Force scroll to bottom after a short delay
+    setTimeout(() => {
+      if (consoleRef.current) {
+        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+      }
+    }, 50);
   };
   
   // Escape HTML to prevent XSS
