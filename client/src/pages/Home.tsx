@@ -126,7 +126,21 @@ export default function Home() {
       const heightUrl = `${baseUrl}/r/blockheight`;
       const heightResponse = await fetch(heightUrl, { cache: 'no-store' });
       if (heightResponse.ok) {
-        blockHeight = await heightResponse.text();
+        const responseText = await heightResponse.text();
+        
+        // Make sure we have a clean response (just the number, not HTML)
+        if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
+          blockHeight = responseText.trim();
+        } else {
+          // Try to extract just numeric content if possible
+          const numericMatch = responseText.match(/\d+/);
+          if (numericMatch) {
+            blockHeight = numericMatch[0];
+          } else {
+            // If we can't parse it properly, don't include it
+            console.error("Invalid block height response:", responseText);
+          }
+        }
       }
     } catch (error) {
       console.error("Error fetching block height:", error);
@@ -343,7 +357,23 @@ export default function Home() {
             return;
           }
           
-          const height = await response.text();
+          const responseText = await response.text();
+          let height = "";
+          
+          // Make sure we have a clean response (just the number, not HTML)
+          if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
+            height = responseText.trim();
+          } else {
+            // Try to extract just numeric content if possible
+            const numericMatch = responseText.match(/\d+/);
+            if (numericMatch) {
+              height = numericMatch[0];
+            } else {
+              appendToConsole("Could not parse block height from response", "error");
+              return;
+            }
+          }
+          
           appendToConsole(`Current block height: ${height}`, "success");
           return;
         }
@@ -366,7 +396,21 @@ export default function Home() {
               return;
             }
             
-            blockHeight = await heightResponse.text();
+            const responseText = await heightResponse.text();
+            
+            // Make sure we have a clean response (just the number, not HTML)
+            if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
+              blockHeight = responseText.trim();
+            } else {
+              // Try to extract just numeric content if possible
+              const numericMatch = responseText.match(/\d+/);
+              if (numericMatch) {
+                blockHeight = numericMatch[0];
+              } else {
+                appendToConsole("Could not parse block height from response", "error");
+                return;
+              }
+            }
           }
           
           // Now get the block info to extract the hash
@@ -392,8 +436,30 @@ export default function Home() {
       // If no arguments, get the latest block info
       if (args.length === 0) {
         // Get the latest block info
-        response = await fetch(`${baseUrl}/r/blockheight`);
-        const height = await response.text();
+        response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
+        
+        if (!response.ok) {
+          appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+          return;
+        }
+        
+        const responseText = await response.text();
+        let height = "";
+        
+        // Make sure we have a clean response (just the number, not HTML)
+        if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
+          height = responseText.trim();
+        } else {
+          // Try to extract just numeric content if possible
+          const numericMatch = responseText.match(/\d+/);
+          if (numericMatch) {
+            height = numericMatch[0];
+          } else {
+            appendToConsole("Could not parse block height from response", "error");
+            return;
+          }
+        }
+        
         url = `${baseUrl}/r/blockinfo/${height}`;
         appendToConsole(`Retrieving latest block (height: ${height})...`, "default");
         response = await fetch(url);
