@@ -260,9 +260,11 @@ export default function Home() {
         const blockTime = await response.text();
         // Check if the response is a valid Unix timestamp (numeric)
         if (!isNaN(Number(blockTime.trim()))) {
-          // Convert to readable date too
-          const date = new Date(Number(blockTime.trim()) * 1000);
-          appendToConsole(`Current block time: ${blockTime} (${date.toISOString()})`, "success");
+          // Convert to readable date using local system timezone
+          const timestamp = Number(blockTime.trim()) * 1000;
+          const date = new Date(timestamp);
+          const localDateTime = date.toLocaleString(); // Uses system timezone
+          appendToConsole(`Current block time: ${blockTime} (${localDateTime})`, "success");
         } else {
           appendToConsole(`Current block time: ${blockTime}`, "success");
         }
