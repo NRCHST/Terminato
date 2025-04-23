@@ -421,7 +421,13 @@ export default function Home() {
                   // Try as CBOR first (primary method)
                   try {
                     const decodedMetadata = decodeMetadata(buffer);
-                    appendToConsole(decodedMetadata, "json");
+                    
+                    // For simple values (like numbers, booleans), format them for better display
+                    const result = typeof decodedMetadata === 'object' 
+                      ? JSON.stringify(decodedMetadata, null, 2)
+                      : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
+                      
+                    appendToConsole(result, "json");
                   } catch (cborError) {
                     // If CBOR fails, fall back to plain text
                     const text = new TextDecoder().decode(buffer);
@@ -477,7 +483,13 @@ export default function Home() {
                 // Try as CBOR first (primary method)
                 try {
                   const decodedMetadata = decodeMetadata(buffer);
-                  appendToConsole(decodedMetadata, "json");
+                  
+                  // For simple values (like numbers, booleans), format them for better display
+                  const result = typeof decodedMetadata === 'object' 
+                    ? JSON.stringify(decodedMetadata, null, 2)
+                    : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
+                    
+                  appendToConsole(result, "json");
                 } catch (cborError) {
                   // If CBOR fails, fall back to plain text
                   const text = new TextDecoder().decode(buffer);
