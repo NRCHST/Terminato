@@ -51,6 +51,9 @@ export default function Home() {
     
     // Try ORD mode first (local server)
     let ordModeWorks = false;
+    let blockTime = "";
+    let blockHeight = "";
+    
     try {
       const ordResponse = await fetch("/r/blocktime", { 
         signal: AbortSignal.timeout(3000),
@@ -64,6 +67,7 @@ export default function Home() {
         // Verify we got a valid Unix timestamp (numeric response)
         if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
           ordModeWorks = true;
+          blockTime = data.trim();
           appendToConsole("Local ORD server detected!", "success");
         }
       }
@@ -84,6 +88,9 @@ export default function Home() {
         // Verify we got a valid Unix timestamp (numeric response)
         if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
           webModeWorks = true;
+          if (blockTime === "") {
+            blockTime = data.trim();
+          }
           appendToConsole("Web connectivity detected!", "success");
         }
       }
@@ -91,25 +98,61 @@ export default function Home() {
       appendToConsole("Web connectivity failed.", "error");
     }
     
-    // Set the mode based on which connection worked
+    // Set the mode based on which connection worked and generate welcome message
+    const now = new Date();
+    const systemTime = now.toLocaleString();
+    
+    let welcomeMessage = "";
+    
+    // Set the appropriate mode
     if (ordModeWorks) {
       setCurrentMode("ORD");
       setBaseUrl("");
       appendToConsole("Using ORD mode.", "success");
-      appendToConsole("Welcome to Termina (ORD mode). Type HELP to see your options.", "system");
     } else if (webModeWorks) {
       setCurrentMode("WEB");
       setBaseUrl("https://ordinals.com");
       appendToConsole("Using WEB mode.", "success");
-      appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
     } else {
       // If both modes failed
       appendToConsole("Could not connect to either local ORD server or ordinals.com", "error");
       appendToConsole("Defaulting to WEB mode. You may need to change modes manually.", "system");
       setCurrentMode("WEB");
       setBaseUrl("https://ordinals.com");
-      appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
     }
+    
+    // Now get the block height for the welcome message
+    try {
+      const heightUrl = `${baseUrl}/r/blockheight`;
+      const heightResponse = await fetch(heightUrl, { cache: 'no-store' });
+      if (heightResponse.ok) {
+        blockHeight = await heightResponse.text();
+      }
+    } catch (error) {
+      console.error("Error fetching block height:", error);
+    }
+    
+    // Format the block time if available
+    let blockTimeFormatted = "";
+    if (blockTime && !isNaN(Number(blockTime))) {
+      const blockDate = new Date(Number(blockTime) * 1000);
+      blockTimeFormatted = blockDate.toLocaleString();
+    }
+    
+    // Construct welcome message
+    welcomeMessage = `Welcome to Termina. You are in ${currentMode} mode.`;
+    welcomeMessage += ` The time is ${systemTime}`;
+    
+    if (blockHeight) {
+      welcomeMessage += ` and the latest block was ${blockHeight}`;
+      if (blockTimeFormatted) {
+        welcomeMessage += ` at ${blockTimeFormatted}`;
+      }
+    }
+    welcomeMessage += ".";
+    
+    appendToConsole(welcomeMessage, "system");
+    appendToConsole("Type HELP to see your options.", "system");
     
     // Enable user input
     setIsProcessing(false);
@@ -189,11 +232,12 @@ export default function Home() {
       appendToConsole("Configuration:", "success");
       appendToConsole("MODE - Switch between WEB and ORD mode", "default");
       appendToConsole("CLEAR - Clear the console", "default");
+      appendToConsole("TIME - Display current system time", "default");
       appendToConsole("", "default");
       
       // Ordinals section with different color
       appendToConsole("Ordinals Recursive Endpoints:", "success");
-      appendToConsole("BLOCK - Retrieve block information", "default");
+      appendToConsole("BLOCK - Retrieve block information (height, hash, time)", "default");
       appendToConsole("INSCRIPTION - Query inscription data", "default");
       appendToConsole("SAT - Get information about specific satoshis", "default");
       appendToConsole("TRANSACTION - Query transaction data", "default");
@@ -247,8 +291,11 @@ export default function Home() {
       
       // Check for BLOCKTIME or BLOCK TIME command
       if (args.length > 0 && (args[0].toUpperCase() === "TIME" || args[0].toUpperCase() === "BLOCKTIME")) {
+        // Get the raw blocktime from API
         url = `${baseUrl}/r/blocktime`;
-        appendToConsole(`Fetching current block time from: ${url}`, "default");
+        
+        // Check for additional options
+        const option = args.length > 1 ? args[1].toUpperCase() : "";
         
         response = await fetch(url, { cache: 'no-store' });
         
@@ -258,17 +305,88 @@ export default function Home() {
         }
         
         const blockTime = await response.text();
+        
         // Check if the response is a valid Unix timestamp (numeric)
         if (!isNaN(Number(blockTime.trim()))) {
-          // Convert to readable date using local system timezone
           const timestamp = Number(blockTime.trim()) * 1000;
           const date = new Date(timestamp);
           const localDateTime = date.toLocaleString(); // Uses system timezone
-          appendToConsole(`Current block time: ${blockTime} (${localDateTime})`, "success");
+          
+          if (option === "UNIX") {
+            // Unix timestamp only
+            appendToConsole(`Current block time (Unix): ${blockTime}`, "success");
+          } else if (option === "LOCAL") {
+            // Local time only
+            appendToConsole(`Current block time (Local): ${localDateTime}`, "success");
+          } else {
+            // Both formats (default)
+            appendToConsole(`Current block time: ${blockTime} (${localDateTime})`, "success");
+          }
         } else {
           appendToConsole(`Current block time: ${blockTime}`, "success");
         }
         return;
+      }
+      
+      // Handle HEIGHT or HASH commands
+      if (args.length > 0) {
+        const command = args[0].toUpperCase();
+        
+        if (command === "HEIGHT") {
+          // Get latest block height
+          url = `${baseUrl}/r/blockheight`;
+          appendToConsole("Fetching latest block height...", "default");
+          response = await fetch(url, { cache: 'no-store' });
+          
+          if (!response.ok) {
+            appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+            return;
+          }
+          
+          const height = await response.text();
+          appendToConsole(`Current block height: ${height}`, "success");
+          return;
+        }
+        
+        if (command === "HASH") {
+          // Get block hash
+          let blockHeight;
+          
+          if (args.length > 1) {
+            // Get hash for specific height
+            blockHeight = args[1];
+            appendToConsole(`Fetching block hash for height ${blockHeight}...`, "default");
+          } else {
+            // Get hash for latest block
+            appendToConsole("Fetching latest block hash...", "default");
+            const heightResponse = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
+            
+            if (!heightResponse.ok) {
+              appendToConsole(`Error: Server responded with status ${heightResponse.status}`, "error");
+              return;
+            }
+            
+            blockHeight = await heightResponse.text();
+          }
+          
+          // Now get the block info to extract the hash
+          url = `${baseUrl}/r/blockinfo/${blockHeight}`;
+          response = await fetch(url);
+          
+          if (!response.ok) {
+            appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+            return;
+          }
+          
+          data = await response.json();
+          
+          if (data && data.hash) {
+            appendToConsole(`Block hash for height ${blockHeight}: ${data.hash}`, "success");
+          } else {
+            appendToConsole("Could not retrieve block hash", "error");
+          }
+          return;
+        }
       }
       
       // If no arguments, get the latest block info
@@ -550,6 +668,39 @@ export default function Home() {
   
 
   
+  const handleTime = (args: string[]) => {
+    setIsProcessing(true);
+    
+    try {
+      const now = new Date();
+      const unixTime = Math.floor(now.getTime() / 1000);
+      const localTime = now.toLocaleString();
+      
+      if (args.length > 0) {
+        const option = args[0].toUpperCase();
+        
+        if (option === "UNIX") {
+          appendToConsole(`Current system time (Unix): ${unixTime}`, "success");
+        } else if (option === "CURRENT" || option === "LOCAL") {
+          appendToConsole(`Current system time (Local): ${localTime}`, "success");
+        } else {
+          appendToConsole(`Unknown TIME option: ${option}. Valid options: UNIX, CURRENT`, "error");
+        }
+      } else {
+        // Default: show both formats
+        appendToConsole(`Current system time: ${unixTime} (${localTime})`, "success");
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
   const handleClear = () => {
     setConsoleEntries([]);
     appendToConsole("Console cleared.", "system");
@@ -572,12 +723,26 @@ MODE ORD : switches to ORD mode, without prefix (requires local ord server)`,
     },
     BLOCK: {
       description: "Retrieve block information.",
-      usage: "BLOCK [<hash or height>|TIME]",
+      usage: "BLOCK [<hash or height>|HEIGHT|HASH|TIME]",
       details: 
 `BLOCK : get latest block info
 BLOCK <hash/height> : get block info at specified HASH or HEIGHT
-BLOCK TIME : shows the current block time (unix timestamp)`,
+BLOCK HEIGHT : get latest block height
+BLOCK HASH : get latest block hash
+BLOCK HASH <height> : get block hash at specific height
+BLOCK TIME : shows the current block time (Unix and local)
+BLOCK TIME UNIX : shows only Unix timestamp
+BLOCK TIME LOCAL : shows only local time format`,
       handler: handleBlock
+    },
+    TIME: {
+      description: "Display current system time.",
+      usage: "TIME [UNIX|CURRENT]",
+      details:
+`TIME : shows current system time in both Unix and local format
+TIME UNIX : shows only Unix timestamp 
+TIME CURRENT : shows only local time format`,
+      handler: handleTime
     },
     INSCRIPTION: {
       description: "Query inscription data.",
