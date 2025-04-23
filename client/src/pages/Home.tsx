@@ -802,183 +802,202 @@ export default function Home() {
   const handleOci = async (args: string[]) => {
     setIsProcessing(true);
     
-    // Define the URLs for the page content - these hardcoded values are from the OCI inscription
-    const pageUrls = [
-      '/content/01bba6c58af39d7f199aa2bceeaaba1ba91b23d2663bc4ef079a4b5e442dbf74i0',
-      '/content/bb01dfa977a5cd0ee6e900f1d1f896b5ec4b1e3c7b18f09c952f25af6591809fi0',
-      '/content/bb02e94f3062facf6aa2e47eeed348d017fd31c97614170dddb58fc59da304efi0',
-      '/content/bb037ec98e6700e8415f95d1f5ca1fe1ba23a3f0c5cb7284d877e9ac418d0d32i0',
-      '/content/bb9438f4345f223c6f4f92adf6db12a82c45d1724019ecd7b6af4fcc3f5786cei0',
-      '/content/bb0542d4606a9e7eb4f31051e91f7696040db06ca1383dff98505618c34d7df7i0',
-      '/content/bb06a4dffba42b6b513ddee452b40a67688562be4a1345127e4d57269e6b2ab6i0',
-      '/content/bb076934c1c22007b315dd1dc0f8c4a2f9d52f348320cfbadc7c0bd99eaa5e18i0',
-      '/content/bb986a1208380ec7db8df55a01c88c73a581069a51b5a2eb2734b41ba10b65c2i0'
-    ];
-    
-    // Some bitmap districts are not the first inscription on their sat - data from the OCI script
-    const satIndices = {
-      92871: 1, 92970: 1, 123132: 1, 365518: 1, 700181: 1, 
-      826151: 1, 827151: 1, 828151: 1, 828239: 1, 828661: 1,
-      829151: 1, 830151: 1, 832104: 2, 832249: 2, 832252: 2,
-      832385: 4, 833067: 1, 833101: 3, 833105: 4, 833109: 4,
-      833121: 8, 834030: 2, 834036: 2, 834051: 17, 834073: 4,
-      836151: 1, 837115: 2, 837120: 2, 837151: 1, 837183: 3,
-      837188: 2, 838058: 5, 838068: 2, 838076: 2, 838096: 1,
-      838151: 1, 838821: 1, 839151: 1, 839377: 1, 839378: 2,
-      839382: 2, 839397: 1, 840151: 1, 841151: 1, 842151: 1,
-      845151: 1
-    };
-    
-    const loadOciData = async () => {
-      if (ociLoaded) {
-        appendToConsole("OCI data is already loaded.", "success");
+    // For loading and executing the OCI functions from the inscription
+    const loadOciModule = async () => {
+      if (ociLoaded && ociData && ociData.getBitmapSat) {
+        appendToConsole("OCI module is already loaded.", "success");
         return true;
       }
       
       try {
-        appendToConsole("Loading Bitcoin Districts OCI data...", "system");
-        appendToConsole("This may take a few moments to understand the structure.", "system");
+        appendToConsole("Loading Bitcoin Districts OCI module...", "system");
+        appendToConsole("This may take a few moments to load and process the inscription.", "system");
         
-        // We're not actually loading the full OCI data, as it would need to fetch 9 inscriptions
-        // Instead, we're marking it as loaded and will fetch and process the specific page when needed
-        setOciData({
-          loaded: true,
-          pageUrls: pageUrls,
-          satIndices: satIndices,
-          loadedPages: {}
-        });
-        setOciLoaded(true);
+        // Fetch the OCI inscription content
+        const inscriptionId = "840bc0df4ffc5a7ccedbee35e97506c9577160e233982e627d0045d06366e362i0";
+        const url = `${baseUrl}/content/${inscriptionId}`;
         
-        appendToConsole("OCI structure prepared. District data will be loaded on demand.", "success");
-        return true;
-      } catch (error) {
-        appendToConsole(`Error initializing OCI data: ${error instanceof Error ? error.message : String(error)}`, "error");
-        return false;
-      }
-    };
-    
-    // Function to get the sat number for a specific district
-    const getBitmapSat = async (districtNumber: number): Promise<number | null> => {
-      if (districtNumber < 0 || districtNumber > 839999) {
-        appendToConsole(`District number must be between 0 and 839999`, "error");
-        return null;
-      }
-      
-      // Determine which page this bitmap is in
-      const page = Math.floor(districtNumber / 100000);
-      
-      // Check if we've already loaded this page
-      if (!ociData.loadedPages[page]) {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) {
+          appendToConsole(`Error: Could not load OCI module. Server responded with ${response.status}`, "error");
+          return false;
+        }
+        
+        const ociScriptText = await response.text();
+        
+        // Extract the important functions from the OCI module
         try {
-          appendToConsole(`Loading data for districts ${page * 100000} - ${(page + 1) * 100000 - 1}...`, "default");
+          // We'll implement the core functions from the OCI script directly
+          // This avoids trying to execute the script which could be problematic
           
-          const url = `${baseUrl}${pageUrls[page]}`;
-          const response = await fetch(url, { cache: 'no-store' });
+          // The module provides these key functions:
+          // - getBitmapSat(bitmapNumber)
+          // - getBitmapSatIndex(bitmapNumber)
+          // - getBitmapInscriptionId(bitmapNumber)
           
-          if (!response.ok) {
-            appendToConsole(`Error: Could not load district data. Server responded with ${response.status}`, "error");
-            return null;
-          }
+          // Instead of trying to evaluate the script, we'll implement the functions
+          // directly based on the script's logic
           
-          let data;
-          const responseText = await response.text();
+          const allPages = [
+            '/content/01bba6c58af39d7f199aa2bceeaaba1ba91b23d2663bc4ef079a4b5e442dbf74i0',
+            '/content/bb01dfa977a5cd0ee6e900f1d1f896b5ec4b1e3c7b18f09c952f25af6591809fi0',
+            '/content/bb02e94f3062facf6aa2e47eeed348d017fd31c97614170dddb58fc59da304efi0',
+            '/content/bb037ec98e6700e8415f95d1f5ca1fe1ba23a3f0c5cb7284d877e9ac418d0d32i0',
+            '/content/bb9438f4345f223c6f4f92adf6db12a82c45d1724019ecd7b6af4fcc3f5786cei0',
+            '/content/bb0542d4606a9e7eb4f31051e91f7696040db06ca1383dff98505618c34d7df7i0',
+            '/content/bb06a4dffba42b6b513ddee452b40a67688562be4a1345127e4d57269e6b2ab6i0',
+            '/content/bb076934c1c22007b315dd1dc0f8c4a2f9d52f348320cfbadc7c0bd99eaa5e18i0',
+            '/content/bb986a1208380ec7db8df55a01c88c73a581069a51b5a2eb2734b41ba10b65c2i0',
+          ];
           
-          try {
-            // Add error handling for page 0 and 1
-            if (page === 0 || page === 1) {
-              // Currently, there's an issue with parsing these pages properly
-              appendToConsole(`Error: Districts in page ${page} (${page * 100000}-${(page + 1) * 100000 - 1}) are not available due to data format issues.`, "error");
-              appendToConsole("Please try a district number between 200000-839999 which can be properly processed.", "default");
-              return null;
-            }
-            // Fix for inconsistent (page 2 & 3) formatting (as per the OCI script)
-            else if (page === 2 || page === 3) {
-              data = JSON.parse('[' + responseText + ']');
-              data = [data.slice(0, 99999), data.slice(100000, 199999)];
-            } else {
-              // Try to parse JSON, handling different formatting possibilities
-              try {
-                data = JSON.parse(responseText.replaceAll('\\n  ', ''));
-              } catch (e) {
+          const satIndices = {
+            92871: 1, 92970: 1, 123132: 1, 365518: 1, 700181: 1, 
+            826151: 1, 827151: 1, 828151: 1, 828239: 1, 828661: 1,
+            829151: 1, 830151: 1, 832104: 2, 832249: 2, 832252: 2,
+            832385: 4, 833067: 1, 833101: 3, 833105: 4, 833109: 4,
+            833121: 8, 834030: 2, 834036: 2, 834051: 17, 834073: 4,
+            836151: 1, 837115: 2, 837120: 2, 837151: 1, 837183: 3,
+            837188: 2, 838058: 5, 838068: 2, 838076: 2, 838096: 1,
+            838151: 1, 838821: 1, 839151: 1, 839377: 1, 839378: 2,
+            839382: 2, 839397: 1, 840151: 1, 841151: 1, 842151: 1,
+            845151: 1
+          };
+          
+          // Cache pages as they are loaded
+          const pages: any[] = Array(9).fill(0);
+          
+          // Implementation of the fillPage function from the OCI script
+          const fillPage = async (page: number) => {
+            appendToConsole(`Loading data for districts ${page * 100000} - ${(page + 1) * 100000 - 1}...`, "default");
+            
+            try {
+              let data;
+              const url = `${baseUrl}${allPages[page]}`;
+              const response = await fetch(url, { cache: 'no-store' });
+              
+              if (!response.ok) {
+                appendToConsole(`Error: Could not load district data. Server responded with ${response.status}`, "error");
+                return false;
+              }
+              
+              const responseText = await response.text();
+              
+              // Process based on page format
+              if (page === 2 || page === 3) {
+                // Special handling for pages 2 & 3
+                data = JSON.parse('[' + responseText + ']');
+                data = [data.slice(0, 99999), data.slice(100000, 199999)];
+              } else {
+                // Handle other pages
                 try {
-                  data = JSON.parse(responseText.replaceAll('  ', ''));
-                } catch (e2) {
-                  // If both formats fail, try the direct parse
-                  data = JSON.parse(responseText);
+                  data = JSON.parse(responseText.replaceAll('\\n  ', ''));
+                } catch (e) {
+                  try {
+                    data = JSON.parse(responseText.replaceAll('  ', ''));
+                  } catch (e2) {
+                    data = JSON.parse(responseText);
+                  }
                 }
               }
+              
+              // Rebuild full sat numbers from deltas
+              const fullSats: number[] = [];
+              data[0].forEach((sat: string | number, i: number) => {
+                if (i === 0) {
+                  fullSats.push(parseInt(sat as string));
+                } else {
+                  fullSats.push(parseInt(fullSats[i-1] as unknown as string) + parseInt(sat as string));
+                }
+              });
+              
+              // Put them back into correct order
+              let filledArray = Array(100000).fill(0);
+              data[1].forEach((index: number, i: number) => {
+                filledArray[index] = fullSats[i];
+              });
+              
+              // Store the loaded page
+              pages[page] = filledArray;
+              appendToConsole(`District data for page ${page} loaded successfully!`, "success");
+              return true;
+            } catch (error) {
+              appendToConsole(`Error processing page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
+              return false;
             }
-          } catch (error) {
-            appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
-            return null;
-          }
+          };
           
-          // Only process data for pages 2-8
-          if (page !== 0 && page !== 1) {
-            // Rebuild full sat numbers from deltas
-            const fullSats: number[] = [];
-            data[0].forEach((sat: string | number, i: number) => {
-              if (i === 0) {
-                fullSats.push(parseInt(sat as string));
-              } else {
-                fullSats.push(parseInt(fullSats[i-1] as unknown as string) + parseInt(sat as string));
+          // Implementation of the getBitmapSat function from the OCI script
+          const getBitmapSat = async (bitmapNumber: number) => {
+            if (bitmapNumber < 0) {
+              appendToConsole('Error: bitmap number is below 0!', "error");
+              return null;
+            } else if (bitmapNumber > 839999) {
+              appendToConsole('Error: bitmap number is above 839,999!', "error");
+              return null;
+            }
+            
+            // Determine which page this bitmap is in
+            const page = Math.floor(bitmapNumber / 100000);
+            
+            // If the page has not yet been fetched and cached, then get it
+            if (!pages[page]) {
+              const success = await fillPage(page);
+              if (!success) return null;
+            }
+            
+            return pages[page][bitmapNumber % 100000];
+          };
+          
+          // Implementation of the getBitmapSatIndex function from the OCI script
+          const getBitmapSatIndex = (bitmapNumber: number) => {
+            return satIndices[bitmapNumber as keyof typeof satIndices] || 0;
+          };
+          
+          // Implementation of the getBitmapInscriptionId function from the OCI script
+          const getBitmapInscriptionId = async (bitmapNumber: number) => {
+            // First get the sat
+            const sat = await getBitmapSat(bitmapNumber);
+            if (!sat) return null;
+            
+            // Get inscription ID from sat endpoint
+            try {
+              const url = `${baseUrl}/r/sat/${sat}/at/${getBitmapSatIndex(bitmapNumber)}`;
+              const response = await fetch(url);
+              
+              if (!response.ok) {
+                appendToConsole(`Error: Could not get inscription ID. Server responded with ${response.status}`, "error");
+                return null;
               }
-            });
-            
-            // Put them back into correct order
-            let filledArray = Array(100000).fill(0);
-            data[1].forEach((index: number, i: number) => {
-              filledArray[index] = fullSats[i];
-            });
-            
-            // Store the loaded page
-            ociData.loadedPages[page] = filledArray;
-            
-            // Only show success message for properly processed pages
-            appendToConsole(`District data for page ${page} loaded successfully!`, "success");
-          }
+              
+              const data = await response.json();
+              return data.id;
+            } catch (error) {
+              appendToConsole(`Error getting inscription ID: ${error instanceof Error ? error.message : String(error)}`, "error");
+              return null;
+            }
+          };
+          
+          // Store the core functions in ociData
+          setOciData({
+            rawScript: ociScriptText,
+            getBitmapSat,
+            getBitmapSatIndex,
+            getBitmapInscriptionId,
+            allPages,
+            satIndices,
+            pages
+          });
+          
+          setOciLoaded(true);
+          appendToConsole("OCI module loaded successfully!", "success");
+          return true;
         } catch (error) {
-          appendToConsole(`Error loading district data: ${error instanceof Error ? error.message : String(error)}`, "error");
-          return null;
+          appendToConsole(`Error processing OCI module: ${error instanceof Error ? error.message : String(error)}`, "error");
+          return false;
         }
-      }
-      
-      // Return the sat number for the district
-      return ociData.loadedPages[page][districtNumber % 100000];
-    };
-    
-    // Function to get the sat index for a district (most are 0, but some are higher)
-    const getBitmapSatIndex = (districtNumber: number): number => {
-      return satIndices[districtNumber as keyof typeof satIndices] || 0;
-    };
-    
-    // Function to get the inscription ID for a district
-    const getBitmapInscriptionId = async (districtNumber: number): Promise<string | null> => {
-      // First get the sat
-      const sat = await getBitmapSat(districtNumber);
-      
-      if (!sat) {
-        return null;
-      }
-      
-      try {
-        // Get the inscription index for this district
-        const satIndex = getBitmapSatIndex(districtNumber);
-        
-        // Get inscription ID from sat endpoint
-        const url = `${baseUrl}/r/sat/${sat}/at/${satIndex}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          appendToConsole(`Error: Could not get inscription ID. Server responded with ${response.status}`, "error");
-          return null;
-        }
-        
-        const data = await response.json();
-        return data.id;
       } catch (error) {
-        appendToConsole(`Error getting inscription ID: ${error instanceof Error ? error.message : String(error)}`, "error");
-        return null;
+        appendToConsole(`Error loading OCI module: ${error instanceof Error ? error.message : String(error)}`, "error");
+        return false;
       }
     };
     
@@ -987,8 +1006,8 @@ export default function Home() {
       const subcommand = args[0].toUpperCase();
       
       if (subcommand === "LOAD") {
-        // Load the OCI data structure
-        await loadOciData();
+        // Load the OCI module
+        await loadOciModule();
       } else {
         // Treat as a district number
         const districtNumber = parseInt(args[0], 10);
@@ -998,41 +1017,50 @@ export default function Home() {
         } else if (districtNumber < 0 || districtNumber > 839999) {
           appendToConsole(`District number must be between 0 and 839999`, "error");
         } else {
-          // First make sure the OCI data structure is loaded
-          const loaded = ociLoaded || await loadOciData();
+          // First make sure the OCI module is loaded
+          const loaded = ociLoaded || await loadOciModule();
           
-          if (loaded) {
+          if (loaded && ociData) {
             appendToConsole(`Resolving sat number for Bitcoin District #${districtNumber}...`, "default");
             
-            const sat = await getBitmapSat(districtNumber);
-            if (sat) {
-              const satIndex = getBitmapSatIndex(districtNumber);
-              appendToConsole(`Bitcoin District #${districtNumber} corresponds to sat ${sat}`, "success");
+            try {
+              const sat = await ociData.getBitmapSat(districtNumber);
               
-              if (satIndex > 0) {
-                appendToConsole(`Note: This district's bitmap is inscription #${satIndex} on this sat`, "default");
+              if (sat) {
+                const satIndex = ociData.getBitmapSatIndex(districtNumber);
+                appendToConsole(`Bitcoin District #${districtNumber} corresponds to sat ${sat}`, "success");
+                
+                if (satIndex > 0) {
+                  appendToConsole(`Note: This district's bitmap is inscription #${satIndex} on this sat`, "default");
+                }
+                
+                // Try to get the inscription ID
+                appendToConsole("Fetching inscription ID...", "default");
+                const inscriptionId = await ociData.getBitmapInscriptionId(districtNumber);
+                
+                if (inscriptionId) {
+                  appendToConsole(`Inscription ID: ${inscriptionId}`, "success");
+                  appendToConsole(`Explore at: ${baseUrl}/inscription/${inscriptionId}`, "default");
+                } else {
+                  appendToConsole("Could not fetch inscription ID.", "error");
+                }
+              } else {
+                appendToConsole(`Could not resolve sat number for district ${districtNumber}.`, "error");
               }
-              
-              // Try to get the inscription ID
-              appendToConsole("Fetching inscription ID...", "default");
-              const inscriptionId = await getBitmapInscriptionId(districtNumber);
-              
-              if (inscriptionId) {
-                appendToConsole(`Inscription ID: ${inscriptionId}`, "success");
-                appendToConsole(`Explore at: ${baseUrl}/inscription/${inscriptionId}`, "default");
-              }
+            } catch (error) {
+              appendToConsole(`Error processing district: ${error instanceof Error ? error.message : String(error)}`, "error");
             }
           }
         }
       }
     } else {
       // No arguments provided, show OCI status
-      if (ociLoaded) {
+      if (ociLoaded && ociData) {
         appendToConsole("OCI Status: Bitcoin Districts mapping ready.", "success");
         appendToConsole("Use OCI <district_number> to lookup the sat number for a specific district.", "default");
         
         // Show how many district pages are loaded
-        const loadedPages = Object.keys(ociData.loadedPages).length;
+        const loadedPages = ociData.pages ? ociData.pages.filter(p => p !== 0).length : 0;
         appendToConsole(`${loadedPages} of 9 district pages are currently loaded.`, "default");
         appendToConsole("Pages are loaded on demand when you query a district number.", "default");
       } else {
