@@ -51,8 +51,6 @@ export default function Home() {
     
     // Try ORD mode first (local server)
     let ordModeWorks = false;
-    let blockTime = "";
-    let blockHeight = "";
     
     try {
       const ordResponse = await fetch("/r/blocktime", { 
@@ -67,7 +65,6 @@ export default function Home() {
         // Verify we got a valid Unix timestamp (numeric response)
         if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
           ordModeWorks = true;
-          blockTime = data.trim();
           appendToConsole("Local ORD server detected!", "success");
         }
       }
@@ -88,9 +85,6 @@ export default function Home() {
         // Verify we got a valid Unix timestamp (numeric response)
         if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
           webModeWorks = true;
-          if (blockTime === "") {
-            blockTime = data.trim();
-          }
           appendToConsole("Web connectivity detected!", "success");
         }
       }
@@ -121,103 +115,12 @@ export default function Home() {
       setBaseUrl("https://ordinals.com");
     }
     
-    // SIMPLIFIED APPROACH: Just get the block height using our existing command handler
-    try {
-      // We'll use the same code as the BLOCK HEIGHT command without any custom logic
-      const processHeightCommand = async () => {
-        // Same as the BLOCK HEIGHT command
-        const getBlockHeight = async (): Promise<string | null> => {
-          // Method 1: Simple request with text/plain header
-          try {
-            const response = await fetch(`${baseUrl}/r/blockheight`, {
-              cache: 'no-store',
-              headers: {
-                'Accept': 'text/plain'
-              }
-            });
-            
-            if (response.ok) {
-              const text = await response.text();
-              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
-                return text.trim();
-              }
-            }
-          } catch (e) {
-            console.log("Height fetch attempt 1 failed");
-          }
-          
-          // Method 2: Try /r/height endpoint 
-          try {
-            const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
-            if (response.ok) {
-              const text = await response.text();
-              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
-                return text.trim();
-              }
-            }
-          } catch (e) {
-            console.log("Height fetch attempt 2 failed");
-          }
-          
-          // Method 3: Try the manual scraping method to extract 893644
-          try {
-            const response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
-            if (response.ok) {
-              const text = await response.text();
-              
-              // Look for a 6-digit number that starts with 8 or 9
-              // This is likely a Bitcoin block height in the 800,000-900,000 range
-              const bitcoinHeight = text.match(/\b(8|9)\d{5}\b/);
-              if (bitcoinHeight && bitcoinHeight[0]) {
-                return bitcoinHeight[0];
-              }
-            }
-          } catch (e) {
-            console.log("Height fetch attempt 3 failed");
-          }
-          
-          return null;
-        };
-        
-        // Try to get the height the same way BLOCK HEIGHT does
-        const height = await getBlockHeight();
-        
-        if (height) {
-          // We found a valid height, use it
-          blockHeight = height;
-        }
-      };
-      
-      // Run the command silently
-      await processHeightCommand();
-      
-    } catch (error) {
-      console.error("Error fetching block height:", error);
-    }
+    // No block height or block time fetch for the welcome message 
+    // Just proceed with a simple welcome message
     
-    // Format the block time if available
-    let blockTimeFormatted = "";
-    if (blockTime && !isNaN(Number(blockTime))) {
-      const blockDate = new Date(Number(blockTime) * 1000);
-      blockTimeFormatted = blockDate.toLocaleString();
-    }
-    
-    // Construct welcome message
+    // Construct welcome message - simplified without block height
     welcomeMessage = `Welcome to Termina. You are in ${currentMode} mode.`;
-    welcomeMessage += ` The time is ${systemTime}`;
-    
-    if (blockHeight) {
-      // Explicitly make sure this is NOT the 3988292 value before displaying
-      if (blockHeight !== "3988292") {
-        welcomeMessage += ` and the latest block was ${blockHeight}`;
-        if (blockTimeFormatted) {
-          welcomeMessage += ` at ${blockTimeFormatted}`;
-        }
-      } else {
-        console.log("Filtered out wrong block height (3988292)");
-      }
-    }
-    welcomeMessage += ".";
+    welcomeMessage += ` The time is ${systemTime}.`;
     
     appendToConsole(welcomeMessage, "system");
     appendToConsole("Type HELP to see your options.", "system");
