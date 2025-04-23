@@ -459,37 +459,49 @@ export default function Home() {
     MODE: {
       description: "Switch between TEST and LIVE mode.",
       usage: "MODE [TEST|LIVE]",
-      details: "MODE TEST : switches to TEST mode, with https://ordinals.com prefix for recursive endpoints\nMODE LIVE : switches to LIVE mode, without https://ordinals.com prefix for recursive endpoints",
+      details: 
+`MODE TEST : switches to TEST mode, with https://ordinals.com prefix for recursive endpoints
+MODE LIVE : switches to LIVE mode, without https://ordinals.com prefix for recursive endpoints`,
       handler: handleMode
     },
     BLOCK: {
       description: "Retrieve block information.",
       usage: "BLOCK [LATEST|<hash or height>]",
-      details: "BLOCK LATEST : get latest block info\nBLOCK {hash/height} : get block info at specified HASH or HEIGHT",
+      details: 
+`BLOCK LATEST : get latest block info
+BLOCK {hash/height} : get block info at specified HASH or HEIGHT`,
       handler: handleBlock
     },
     INSCRIPTION: {
       description: "Query inscription data.",
       usage: "INSCRIPTION <inscription_id> [ALL|CONTENT|UNDELEGATED|INFO|METADATA|PARENTS|CHILDREN]",
-      details: "INSCRIPTION <inscription_id> : This is the main command, resolves ALL by default\nINSCRIPTION <inscription_id> ALL : Returns content, undelegated content, inscription info, metadata, inscriptions on sat, parents, children\nINSCRIPTION <inscription_id> CONTENT : Return content only of inscription\nINSCRIPTION <inscription_id> UNDELEGATED : Return undelegated content of inscription\nINSCRIPTION <inscription_id> INFO : Return inscription info\nINSCRIPTION <inscription_id> METADATA : Returns inscription METADATA\nINSCRIPTION <inscription_id> PARENTS : Returns inscription PARENTS\nINSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN",
+      details: 
+`INSCRIPTION <inscription_id> : This is the main command, resolves ALL by default
+INSCRIPTION <inscription_id> ALL : Returns content, undelegated content, inscription info, metadata, inscriptions on sat, parents, children
+INSCRIPTION <inscription_id> CONTENT : Return content only of inscription
+INSCRIPTION <inscription_id> UNDELEGATED : Return undelegated content of inscription
+INSCRIPTION <inscription_id> INFO : Return inscription info
+INSCRIPTION <inscription_id> METADATA : Returns inscription METADATA
+INSCRIPTION <inscription_id> PARENTS : Returns inscription PARENTS
+INSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN`,
       handler: handleInscription
     },
     SAT: {
       description: "Get information about specific satoshis.",
       usage: "SAT <number>",
-      details: "SAT <number> : Get information about a specific satoshi",
+      details: `SAT <number> : Get information about a specific satoshi`,
       handler: handleSat
     },
     TRANSACTION: {
       description: "Query transaction data.",
       usage: "TRANSACTION <txid>",
-      details: "TRANSACTION <txid> : Get transaction details",
+      details: `TRANSACTION <txid> : Get transaction details`,
       handler: handleTransaction
     },
     UTXO: {
       description: "View UTXO information.",
       usage: "UTXO <txid:vout>",
-      details: "UTXO <txid:vout> : Get information about a specific UTXO in the format txid:vout",
+      details: `UTXO <txid:vout> : Get information about a specific UTXO in the format txid:vout`,
       handler: handleUtxo
     },
     CLEAR: {
