@@ -389,8 +389,33 @@ export default function Home() {
         let data: any;
         
         try {
-          // Special handling for pages 2 and 3
-          if (page === 2 || page === 3) {
+          // Special handling for different page formats
+          if (page === 0 || page === 1) {
+            // Pages 0 and 1 have a different format
+            try {
+              // First try to parse as standard JSON
+              const jsonData = JSON.parse(responseText);
+              
+              // For these pages, we need to extract deltas and indices differently
+              if (jsonData && typeof jsonData === 'object') {
+                const keys = Object.keys(jsonData);
+                // If we have at least two arrays in the data
+                if (keys.length >= 2 && 
+                    Array.isArray(jsonData[keys[0]]) && 
+                    Array.isArray(jsonData[keys[1]])) {
+                  
+                  // Construct the expected format
+                  const deltas = jsonData[keys[0]];
+                  const indices = jsonData[keys[1]];
+                  data = [deltas, indices];
+                  appendToConsole(`Successfully parsed data for page ${page} using special format.`, "success");
+                }
+              }
+            } catch (e) {
+              appendToConsole(`Error parsing data for page ${page}: ${e instanceof Error ? e.message : String(e)}`, "error");
+            }
+          } else if (page === 2 || page === 3) {
+            // Special handling for pages 2 and 3
             data = JSON.parse('[' + responseText + ']');
             data = [data.slice(0, 99999), data.slice(100000, 199999)];
           } else {
