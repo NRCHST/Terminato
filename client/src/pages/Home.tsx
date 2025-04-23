@@ -111,7 +111,13 @@ export default function Home() {
   const handleHelp = (args: string[]) => {
     if (args.length === 0) {
       appendToConsole("For more information on a specific command, type HELP command-name. Your options are:", "system");
-      appendToConsole("MODE\nBLOCK\nINSCRIPTION\nSAT\nTRANSACTION\nUTXO\nCLEAR", "default");
+      appendToConsole("MODE - Switch between TEST and LIVE mode", "default");
+      appendToConsole("BLOCK - Retrieve block information", "default");
+      appendToConsole("INSCRIPTION - Query inscription data", "default");
+      appendToConsole("SAT - Get information about specific satoshis", "default");
+      appendToConsole("TRANSACTION - Query transaction data", "default");
+      appendToConsole("UTXO - View UTXO information", "default");
+      appendToConsole("CLEAR - Clear the console", "default");
     } else {
       const commandName = args[0].toUpperCase();
       if (commandName in commands) {
@@ -287,9 +293,32 @@ export default function Home() {
     
     try {
       const url = `${baseUrl}/r/address/${address}/utxo`;
+      appendToConsole(`Fetching UTXOs from: ${url}`, "default");
+      
       const response = await fetch(url);
-      const data = await response.json();
-      appendToConsole(JSON.stringify(data, null, 2), "json");
+      
+      // Check if the response is ok before trying to parse JSON
+      if (!response.ok) {
+        appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+        if (response.status === 404) {
+          appendToConsole("Address not found or has no UTXOs", "error");
+        }
+        return;
+      }
+      
+      // Check the response text before parsing to avoid JSON errors
+      const text = await response.text();
+      if (!text || text.trim() === "") {
+        appendToConsole("No UTXOs found for this address", "default");
+        return;
+      }
+      
+      try {
+        const data = JSON.parse(text);
+        appendToConsole(JSON.stringify(data, null, 2), "json");
+      } catch (parseError) {
+        appendToConsole(`Could not parse response as JSON: ${text}`, "error");
+      }
     } catch (error) {
       if (error instanceof Error) {
         appendToConsole(`Error: ${error.message}`, "error");
