@@ -69,8 +69,15 @@ export default function Home() {
     SIMPLE_AND_FLOAT: 7
   };
   
-  // Function to convert hex to text
+  // Function to convert hex to text for Ordinals metadata
   const hexToText = (hex: string): string => {
+    // For Ordinals metadata, the first few bytes might be a prefix we want to skip
+    // Check if the hex string starts with "784b21" (which is "xK!" in ASCII)
+    if (hex.startsWith("784b21")) {
+      // Skip the "784b21" prefix - this is specific to Ordinals metadata format
+      hex = hex.substring(6);
+    }
+    
     let str = '';
     for (let i = 0; i < hex.length; i += 2) {
       const hexValue = parseInt(hex.substr(i, 2), 16);
@@ -78,8 +85,11 @@ export default function Home() {
       if (hexValue >= 32 && hexValue <= 126) {
         str += String.fromCharCode(hexValue);
       } else {
-        // For non-printable characters, show the hex value
-        str += `\\x${hex.substr(i, 2)}`;
+        // For non-printable characters, just skip them or add a placeholder
+        // This helps avoid clutter from control characters
+        if (hexValue !== 0) { // Skip null bytes
+          // str += `·`; // Uncomment this if you want a placeholder
+        }
       }
     }
     return str;
