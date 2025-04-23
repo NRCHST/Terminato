@@ -873,6 +873,8 @@ export default function Home() {
             try {
               let data;
               const url = `${baseUrl}${allPages[page]}`;
+              appendToConsole(`Fetching from: ${url}`, "default");
+              
               const response = await fetch(url, { cache: 'no-store' });
               
               if (!response.ok) {
@@ -882,31 +884,95 @@ export default function Home() {
               
               const responseText = await response.text();
               
+              // Log the first 100 characters of the response for debugging
+              const previewText = responseText.length > 100 
+                ? responseText.substring(0, 100) + "..." 
+                : responseText;
+              appendToConsole(`Response preview for page ${page}: ${previewText}`, "default");
+              
               // Process based on page format as seen in the Browser implementation
               try {
-                if (page === 2 || page === 3) {
+                if (page === 0 || page === 1) {
+                  // Special handling for pages 0 & 1
+                  appendToConsole(`Using special processing for page ${page}`, "default");
+                  
+                  // For pages 0 and 1, manually parse the JSON to get the array structure
+                  // Check if it starts with [[ which indicates a proper JSON array of arrays
+                  if (responseText.trim().startsWith('[[')) {
+                    appendToConsole(`Page ${page} seems to be in correct array format, trying direct parse`, "default");
+                    data = JSON.parse(responseText);
+                  } else {
+                    // Try to parse with additional wrapping
+                    appendToConsole(`Page ${page} might need wrapping, trying with additional brackets`, "default");
+                    try {
+                      // Try to construct a valid array of arrays structure
+                      const fixedResponse = responseText.replaceAll('\\n', '').replaceAll('\\"', '"');
+                      data = JSON.parse(fixedResponse);
+                      
+                      // If it's not an array of arrays, make it one
+                      if (!Array.isArray(data[0])) {
+                        appendToConsole(`Restructuring page ${page} data format`, "default");
+                        
+                        // Create a structure with two arrays similar to the expected format
+                        // First, scan through the data to find all the indices of saturation
+                        let indices: number[] = [];
+                        let values: number[] = [];
+                        
+                        // If data is an object with key-value pairs, extract keys as indices and values as satoshis
+                        if (typeof data === 'object' && !Array.isArray(data)) {
+                          for (const [index, value] of Object.entries(data)) {
+                            if (!isNaN(parseInt(index)) && !isNaN(parseInt(value as string))) {
+                              indices.push(parseInt(index));
+                              values.push(parseInt(value as string));
+                            }
+                          }
+                          
+                          // Create the expected data structure
+                          data = [values, indices];
+                        }
+                      }
+                    } catch (e) {
+                      appendToConsole(`Failed to fix page ${page} format: ${e instanceof Error ? e.message : String(e)}`, "error");
+                      throw e;
+                    }
+                  }
+                } else if (page === 2 || page === 3) {
                   // Special handling for pages 2 & 3
+                  appendToConsole(`Using special processing for page ${page} (adding brackets)`, "default");
                   data = JSON.parse('[' + responseText + ']');
                   data = [data.slice(0, 99999), data.slice(100000, 199999)];
                 } else {
-                  // Try different parsing approaches for other pages (including 0 and 1)
+                  // Try different parsing approaches for other pages
                   try {
+                    appendToConsole(`Trying to parse page ${page} with replaceAll('\\n  ', '')`, "default");
                     data = JSON.parse(responseText.replaceAll('\\n  ', ''));
                   } catch (e) {
+                    appendToConsole(`First parse attempt failed: ${e instanceof Error ? e.message : String(e)}`, "default");
                     try {
+                      appendToConsole(`Trying to parse page ${page} with replaceAll('  ', '')`, "default");
                       data = JSON.parse(responseText.replaceAll('  ', ''));
                     } catch (e2) {
+                      appendToConsole(`Second parse attempt failed: ${e2 instanceof Error ? e2.message : String(e2)}`, "default");
                       // Direct parse as last resort
+                      appendToConsole(`Trying direct JSON.parse on page ${page}`, "default");
                       data = JSON.parse(responseText);
                     }
                   }
                 }
               
-                // Verify the data format to avoid errors
-                if (!Array.isArray(data) || !Array.isArray(data[0]) || !Array.isArray(data[1])) {
-                  appendToConsole(`Error: Unexpected data format for page ${page}`, "error");
+                // Verify the data format
+                appendToConsole(`Checking data format for page ${page}...`, "default");
+                
+                if (!Array.isArray(data)) {
+                  appendToConsole(`Error: Data for page ${page} is not an array, got: ${typeof data}`, "error");
                   return false;
                 }
+                
+                if (!Array.isArray(data[0]) || !Array.isArray(data[1])) {
+                  appendToConsole(`Error: Data structure for page ${page} is unexpected, data[0] is ${typeof data[0]}, data[1] is ${typeof data[1]}`, "error");
+                  return false;
+                }
+                
               } catch (parseError) {
                 appendToConsole(`Error parsing data for page ${page}: ${parseError instanceof Error ? parseError.message : String(parseError)}`, "error");
                 return false;
