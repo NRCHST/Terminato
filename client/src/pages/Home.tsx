@@ -368,8 +368,13 @@ export default function Home() {
     setIsProcessing(true);
     
     try {
-      // First argument is always the inscription ID
-      const inscriptionId = args[0];
+      // First argument is always the inscription ID, but might need special handling
+      let inscriptionId = args[0];
+      
+      // Support for special formats like !{txid}i{vout}|#{height}
+      if (inscriptionId.startsWith('!') && inscriptionId.includes('|#')) {
+        appendToConsole(`Using special format inscription ID: ${inscriptionId}`, "default");
+      }
       
       // Second argument is the optional subcommand
       let subcommand = args.length > 1 ? args[1].toUpperCase() : "ALL";
