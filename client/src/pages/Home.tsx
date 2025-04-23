@@ -1,0 +1,515 @@
+import { useEffect, useRef, useState } from "react";
+
+type ConsoleEntryType = "input" | "error" | "success" | "system" | "json" | "default";
+
+interface ConsoleEntry {
+  text: string;
+  type: ConsoleEntryType;
+}
+
+interface Command {
+  description: string;
+  usage: string;
+  details?: string;
+  handler: (args: string[]) => void;
+}
+
+export default function Home() {
+  const [currentMode, setCurrentMode] = useState<"TEST" | "LIVE">("TEST");
+  const [baseUrl, setBaseUrl] = useState("https://ordinals.com");
+  const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([
+    { text: "Welcome to Termina (test build)! Type HELP to see your options.", type: "system" }
+  ]);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [inputValue, setInputValue] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const consoleRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Keep the console scrolled to the bottom
+  useEffect(() => {
+    if (consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    }
+  }, [consoleEntries]);
+  
+  // Focus the input when the component mounts
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+  
+  // Append text to the console
+  const appendToConsole = (text: string, type: ConsoleEntryType = "default") => {
+    setConsoleEntries(prev => [...prev, { text, type }]);
+  };
+  
+  // Escape HTML to prevent XSS
+  const escapeHtml = (unsafe: string): string => {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+  
+  // Format JSON with syntax highlighting
+  const formatJsonOutput = (jsonString: string): string => {
+    return escapeHtml(jsonString)
+      .replace(/(".*?")/g, '<span class="text-blue-400">$1</span>')
+      .replace(/\b(true|false|null)\b/g, '<span class="text-red-400">$1</span>')
+      .replace(/\b(\d+)\b/g, '<span class="text-green-400">$1</span>');
+  };
+  
+  // Handle command input
+  const handleCommandInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !isProcessing) {
+      const command = inputValue.trim();
+      
+      if (command) {
+        // Add to history
+        setCommandHistory(prev => [command, ...prev]);
+        setHistoryIndex(-1);
+        
+        // Display command
+        appendToConsole(command, "input");
+        
+        // Process command
+        processCommand(command);
+        
+        // Clear input
+        setInputValue('');
+      }
+    } 
+    // Command history navigation (up/down arrows)
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (historyIndex < commandHistory.length - 1) {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setInputValue(commandHistory[newIndex]);
+      }
+    }
+    else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex > 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setInputValue(commandHistory[newIndex]);
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1);
+        setInputValue('');
+      }
+    }
+  };
+  
+  // Command handlers
+  const handleHelp = (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("For more information on a specific command, type HELP command-name. Your options are:", "system");
+      appendToConsole(Object.keys(commands).join("\n"), "default");
+    } else {
+      const commandName = args[0].toUpperCase();
+      if (commandName in commands) {
+        const command = commands[commandName as keyof typeof commands];
+        appendToConsole(`${commandName} - ${command.description}`, "system");
+        appendToConsole(`Usage: ${command.usage}`, "default");
+        if (command.details) {
+          appendToConsole(command.details, "default");
+        }
+      } else {
+        appendToConsole(`No help available for '${commandName}'. Type HELP to see available commands.`, "error");
+      }
+    }
+  };
+  
+  const handleMode = (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole(`Current mode: ${currentMode}`, "success");
+      return;
+    }
+    
+    const mode = args[0].toUpperCase();
+    if (mode === "TEST") {
+      setCurrentMode("TEST");
+      setBaseUrl("https://ordinals.com");
+      appendToConsole("Switched to TEST mode. Using https://ordinals.com prefix.", "success");
+    } else if (mode === "LIVE") {
+      setCurrentMode("LIVE");
+      setBaseUrl("");
+      appendToConsole("Switched to LIVE mode. Using no prefix.", "success");
+    } else {
+      appendToConsole(`Invalid mode: ${mode}. Available modes: TEST, LIVE`, "error");
+    }
+  };
+  
+  const handleBlock = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a BLOCK command. Type HELP BLOCK for options.", "error");
+      return;
+    }
+    
+    const subcommand = args[0].toUpperCase();
+    setIsProcessing(true);
+    
+    try {
+      let url;
+      let response;
+      let data;
+      
+      switch (subcommand) {
+        case "HASH":
+          if (args.length > 1) {
+            url = `${baseUrl}/r/blockhash/${args[1]}`;
+          } else {
+            url = `${baseUrl}/r/blockhash`;
+          }
+          
+          response = await fetch(url);
+          data = await response.text();
+          appendToConsole(data, "json");
+          break;
+          
+        case "HEIGHT":
+          url = `${baseUrl}/r/blockheight`;
+          response = await fetch(url);
+          data = await response.text();
+          appendToConsole(data, "default");
+          break;
+          
+        case "TIME":
+          url = `${baseUrl}/r/blocktime`;
+          response = await fetch(url);
+          data = await response.text();
+          appendToConsole(`Block timestamp: ${data}`, "default");
+          appendToConsole(`Date: ${new Date(parseInt(data) * 1000).toUTCString()}`, "default");
+          break;
+          
+        case "INFO":
+          if (args.length < 2) {
+            appendToConsole("Please provide a block hash or height.", "error");
+            break;
+          }
+          url = `${baseUrl}/r/blockinfo/${args[1]}`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        default:
+          appendToConsole(`Unknown BLOCK subcommand: ${subcommand}. Type HELP BLOCK for options.`, "error");
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleInscription = async (args: string[]) => {
+    if (args.length < 2) {
+      appendToConsole("Please specify an INSCRIPTION subcommand and ID. Type HELP INSCRIPTION for options.", "error");
+      return;
+    }
+    
+    const subcommand = args[0].toUpperCase();
+    const inscriptionId = args[1];
+    setIsProcessing(true);
+    
+    try {
+      let url;
+      let response;
+      
+      switch (subcommand) {
+        case "CONTENT":
+          url = `${baseUrl}/content/${inscriptionId}`;
+          appendToConsole(`Retrieving content from: ${url}`, "default");
+          appendToConsole(`To view content, visit: ${url}`, "success");
+          break;
+          
+        case "CHILDREN":
+          url = `${baseUrl}/r/children/${inscriptionId}`;
+          response = await fetch(url);
+          const data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        default:
+          appendToConsole(`Unknown INSCRIPTION subcommand: ${subcommand}. Type HELP INSCRIPTION for options.`, "error");
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleSat = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a satoshi number. Type HELP SAT for options.", "error");
+      return;
+    }
+    
+    const satNumber = args[0];
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/sat/${satNumber}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      appendToConsole(JSON.stringify(data, null, 2), "json");
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleTransaction = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a transaction ID. Type HELP TRANSACTION for options.", "error");
+      return;
+    }
+    
+    const txid = args[0];
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/tx/${txid}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      appendToConsole(JSON.stringify(data, null, 2), "json");
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleUtxo = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a Bitcoin address. Type HELP UTXO for options.", "error");
+      return;
+    }
+    
+    const address = args[0];
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/address/${address}/utxo`;
+      const response = await fetch(url);
+      const data = await response.json();
+      appendToConsole(JSON.stringify(data, null, 2), "json");
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleClear = () => {
+    setConsoleEntries([]);
+    appendToConsole("Console cleared.", "system");
+  };
+  
+  // Command definitions
+  const commands: Record<string, Command> = {
+    HELP: {
+      description: "Displays help information for available commands.",
+      usage: "HELP [command]",
+      handler: handleHelp
+    },
+    MODE: {
+      description: "Switch between TEST and LIVE mode.",
+      usage: "MODE [TEST|LIVE]",
+      details: "MODE TEST : uses https://ordinals.com prefix for endpoints\nMODE LIVE : uses no prefix for endpoints",
+      handler: handleMode
+    },
+    BLOCK: {
+      description: "Retrieve block information.",
+      usage: "BLOCK [HASH|HEIGHT|TIME|INFO <hash or height>]",
+      details: "BLOCK HASH : Get latest block hash\nBLOCK HASH <height> : Get block hash at specified height\nBLOCK HEIGHT : Get latest block height\nBLOCK TIME : Get timestamp of latest block\nBLOCK INFO <hash or height> : Get detailed information about a block",
+      handler: handleBlock
+    },
+    INSCRIPTION: {
+      description: "Query inscription data.",
+      usage: "INSCRIPTION [CONTENT|CHILDREN] <inscription_id>",
+      details: "INSCRIPTION CONTENT <id> : Get content of an inscription\nINSCRIPTION CHILDREN <id> : Get child inscriptions",
+      handler: handleInscription
+    },
+    SAT: {
+      description: "Get information about specific satoshis.",
+      usage: "SAT <number>",
+      details: "SAT <number> : Get information about a specific satoshi",
+      handler: handleSat
+    },
+    TRANSACTION: {
+      description: "Query transaction data.",
+      usage: "TRANSACTION <txid>",
+      details: "TRANSACTION <txid> : Get transaction details",
+      handler: handleTransaction
+    },
+    UTXO: {
+      description: "View UTXO information.",
+      usage: "UTXO <address>",
+      details: "UTXO <address> : List UTXOs for a Bitcoin address",
+      handler: handleUtxo
+    },
+    CLEAR: {
+      description: "Clear the console.",
+      usage: "CLEAR",
+      handler: handleClear
+    }
+  };
+  
+  // Process the command entered by the user
+  const processCommand = (commandStr: string) => {
+    const parts = commandStr.trim().split(' ');
+    const primaryCommand = parts[0].toUpperCase();
+    
+    if (primaryCommand in commands) {
+      commands[primaryCommand as keyof typeof commands].handler(parts.slice(1));
+    } else {
+      appendToConsole(`Unknown command: ${primaryCommand}. Type HELP to see available commands.`, "error");
+    }
+  };
+  
+  return (
+    <div className="bg-[#1E1E1E] text-[#E0E0E0] font-mono h-screen flex flex-col">
+      {/* Header */}
+      <header className="p-4 border-b border-[#424242] flex justify-between items-center">
+        <div className="flex items-center space-x-2">
+          <div className="h-3 w-3 rounded-full bg-[#FF5252]"></div>
+          <div className="h-3 w-3 rounded-full bg-[#F5A623]"></div>
+          <div className="h-3 w-3 rounded-full bg-[#4CAF50]"></div>
+        </div>
+        <h1 className="text-xl font-bold text-[#F5A623]">TERMINA</h1>
+        <div className="text-sm text-[#E0E0E0] opacity-70">{currentMode} MODE</div>
+      </header>
+
+      {/* Console Output */}
+      <div
+        ref={consoleRef}
+        className="flex-1 p-4 overflow-y-auto"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#555 #1E1E1E'
+        }}
+      >
+        {consoleEntries.map((entry, index) => {
+          let content: React.ReactNode;
+          
+          switch(entry.type) {
+            case "input":
+              content = (
+                <>
+                  <span className="text-[#F5A623] mr-2">&gt;</span>
+                  <span>{entry.text}</span>
+                </>
+              );
+              break;
+            case "error":
+              content = <span className="text-[#FF5252]">{entry.text}</span>;
+              break;
+            case "success":
+              content = <span className="text-[#4CAF50]">{entry.text}</span>;
+              break;
+            case "system":
+              content = <span className="text-[#F5A623]">{entry.text}</span>;
+              break;
+            case "json":
+              try {
+                // Try to parse and format as JSON
+                const formatted = JSON.stringify(JSON.parse(entry.text), null, 2);
+                content = (
+                  <span 
+                    className="text-[#E0E0E0] whitespace-pre-wrap"
+                    dangerouslySetInnerHTML={{ __html: formatJsonOutput(formatted) }}
+                  />
+                );
+              } catch (e) {
+                content = <span className="text-[#E0E0E0]">{entry.text}</span>;
+              }
+              break;
+            default:
+              content = <span className="text-[#E0E0E0]">{entry.text}</span>;
+          }
+          
+          return (
+            <div key={index} className="mb-2">
+              {content}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Command Input */}
+      <div className="border-t border-[#424242] p-4 flex items-center">
+        <span className="text-[#F5A623] mr-2">&gt;</span>
+        <input 
+          ref={inputRef}
+          type="text" 
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleCommandInput}
+          className="bg-transparent flex-1 outline-none border-none font-mono text-[#E0E0E0]"
+          autoFocus
+          autoComplete="off"
+          disabled={isProcessing}
+        />
+        <span className="animate-[blink_1.2s_infinite]">|</span>
+      </div>
+
+      <style jsx global>{`
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #1E1E1E;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #555;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #777;
+        }
+        
+        /* Ensure consistent monospace rendering */
+        .font-mono {
+          font-variant-ligatures: none;
+        }
+        
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
