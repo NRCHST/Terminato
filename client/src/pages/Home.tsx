@@ -247,10 +247,23 @@ export default function Home() {
   
   // Format JSON with syntax highlighting
   const formatJsonOutput = (jsonString: string): string => {
-    return escapeHtml(jsonString)
-      .replace(/(".*?")/g, '<span class="text-blue-400">$1</span>')
-      .replace(/\b(true|false|null)\b/g, '<span class="text-red-400">$1</span>')
-      .replace(/\b(\d+)\b/g, '<span class="text-green-400">$1</span>');
+    try {
+      const escaped = escapeHtml(jsonString);
+      
+      // More robust syntax highlighting for JSON
+      return escaped
+        // Highlight keys (property names)
+        .replace(/"([^"]+)":/g, '<span class="text-yellow-400">"$1"</span>:')
+        // Highlight string values
+        .replace(/: *"([^"]+)"/g, ': <span class="text-blue-400">"$1"</span>')
+        // Highlight boolean and null values
+        .replace(/\b(true|false|null)\b/g, '<span class="text-red-400">$1</span>')
+        // Highlight numbers
+        .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-green-400">$1</span>');
+    } catch (error) {
+      console.error("Error formatting JSON:", error);
+      return escapeHtml(jsonString); // Fallback to just escaped HTML
+    }
   };
   
   // Handle command input
@@ -546,14 +559,32 @@ export default function Home() {
                     // Convert hex to text
                     const decoded = hexToText(hexString);
                     
-                    // Check if the decoded result is valid JSON
-                    try {
-                      const jsonObj = JSON.parse(decoded);
-                      appendToConsole("METADATA (JSON):", "success");
-                      appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
-                    } catch (jsonError) {
-                      // Not JSON, just show as decoded text
-                      appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                    // For this specific inscription, it's a pipe-delimited format, not JSON
+                    if (decoded.includes("|#")) {
+                      // It's a reference and number format (common in Ordinals)
+                      const parts = decoded.split("|#");
+                      if (parts.length === 2) {
+                        const [reference, number] = parts;
+                        // Format as a structured object for better display
+                        const formattedObj = {
+                          reference: reference,
+                          number: number
+                        };
+                        appendToConsole("METADATA (Structured):", "success");
+                        appendToConsole(JSON.stringify(formattedObj, null, 2), "json");
+                      } else {
+                        appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                      }
+                    } else {
+                      // Try parsing as JSON if it's not the reference format
+                      try {
+                        const jsonObj = JSON.parse(decoded);
+                        appendToConsole("METADATA (JSON):", "success");
+                        appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
+                      } catch (jsonError) {
+                        // Not JSON, just show as decoded text
+                        appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                      }
                     }
                   } else {
                     // Try CBOR as fallback
@@ -816,14 +847,18 @@ export default function Home() {
             case "json":
               try {
                 // Try to parse and format as JSON
-                const formatted = JSON.stringify(JSON.parse(entry.text), null, 2);
+                // We need to ensure it's valid JSON before trying to format it
+                const jsonObj = JSON.parse(entry.text);
+                // Re-stringify with proper indentation
+                const formatted = JSON.stringify(jsonObj, null, 2);
                 content = (
-                  <span 
-                    className="text-[#E0E0E0] whitespace-pre-wrap"
+                  <pre 
+                    className="text-[#E0E0E0] whitespace-pre-wrap bg-[#1A1A1A] p-2 rounded"
                     dangerouslySetInnerHTML={{ __html: formatJsonOutput(formatted) }}
                   />
                 );
               } catch (e) {
+                // If it's not valid JSON, just display as is
                 content = <span className="text-[#E0E0E0]">{entry.text}</span>;
               }
               break;
