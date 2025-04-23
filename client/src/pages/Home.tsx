@@ -69,6 +69,22 @@ export default function Home() {
     SIMPLE_AND_FLOAT: 7
   };
   
+  // Function to convert hex to text
+  const hexToText = (hex: string): string => {
+    let str = '';
+    for (let i = 0; i < hex.length; i += 2) {
+      const hexValue = parseInt(hex.substr(i, 2), 16);
+      // Only convert to character if it's a printable ASCII code
+      if (hexValue >= 32 && hexValue <= 126) {
+        str += String.fromCharCode(hexValue);
+      } else {
+        // For non-printable characters, show the hex value
+        str += `\\x${hex.substr(i, 2)}`;
+      }
+    }
+    return str;
+  };
+
   // Simple CBOR decoder function (supports basic types, assuming valid CBOR)
   const decodeCBOR = (buffer: ArrayBuffer): any => {
     const bytes = new Uint8Array(buffer);
@@ -418,18 +434,45 @@ export default function Home() {
                 appendToConsole("METADATA:", "success");
                 
                 try {
-                  // Try as CBOR first (primary method)
                   try {
-                    const decodedMetadata = decodeMetadata(buffer);
-                    
-                    // For simple values (like numbers, booleans), format them for better display
-                    const result = typeof decodedMetadata === 'object' 
-                      ? JSON.stringify(decodedMetadata, null, 2)
-                      : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
+                    // Try as CBOR first (primary method)
+                    try {
+                      const decodedMetadata = decodeMetadata(buffer);
                       
-                    appendToConsole(result, "json");
-                  } catch (cborError) {
-                    // If CBOR fails, fall back to plain text
+                      // For simple values (like numbers, booleans), format them for better display
+                      const result = typeof decodedMetadata === 'object' 
+                        ? JSON.stringify(decodedMetadata, null, 2)
+                        : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
+                        
+                      appendToConsole(result, "json");
+                    } catch (cborError) {
+                      // If CBOR decoding fails, try hex decoding if it looks like a hex string
+                      const text = new TextDecoder().decode(buffer);
+                      
+                      // Check if the text is a JSON string containing hex (common with ordinals)
+                      if (text.startsWith('"') && text.endsWith('"')) {
+                        try {
+                          // Remove the quotes and decode hex
+                          const hexContent = text.substring(1, text.length - 1);
+                          // Check if it's a valid hex string
+                          if (/^[0-9a-fA-F]+$/.test(hexContent)) {
+                            // Convert hex to readable text
+                            const hexDecoded = hexToText(hexContent);
+                            appendToConsole(`Hex Decoded: ${hexDecoded}`, "success");
+                          } else {
+                            // Not a hex string, just show the content
+                            appendToConsole(text, "default");
+                          }
+                        } catch (hexError) {
+                          appendToConsole(text, "default");
+                        }
+                      } else {
+                        // Regular text, just display it
+                        appendToConsole(text, "default");
+                      }
+                    }
+                  } catch (error) {
+                    // If all else fails, show as plain text
                     const text = new TextDecoder().decode(buffer);
                     appendToConsole(text, "default");
                   }
@@ -480,20 +523,42 @@ export default function Home() {
               appendToConsole("METADATA:", "success");
               
               try {
-                // Try as CBOR first (primary method)
-                try {
-                  const decodedMetadata = decodeMetadata(buffer);
+                // First check for hex-encoded string (common in Ordinals)
+                const text = new TextDecoder().decode(buffer);
                   
-                  // For simple values (like numbers, booleans), format them for better display
-                  const result = typeof decodedMetadata === 'object' 
-                    ? JSON.stringify(decodedMetadata, null, 2)
-                    : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
-                    
-                  appendToConsole(result, "json");
-                } catch (cborError) {
-                  // If CBOR fails, fall back to plain text
-                  const text = new TextDecoder().decode(buffer);
-                  appendToConsole(text, "default");
+                // Check if it's a JSON string containing hex
+                if (text.startsWith('"') && text.endsWith('"')) {
+                  // Extract the hex string without quotes
+                  const hexString = text.substring(1, text.length - 1);
+                  
+                  // Check if it looks like a hex string
+                  if (/^[0-9a-fA-F]+$/.test(hexString)) {
+                    // Convert hex to text
+                    const decoded = hexToText(hexString);
+                    appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                  } else {
+                    // Try CBOR as fallback
+                    try {
+                      const decodedMetadata = decodeMetadata(buffer);
+                      const result = typeof decodedMetadata === 'object' 
+                        ? JSON.stringify(decodedMetadata, null, 2)
+                        : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
+                      appendToConsole(result, "json");
+                    } catch (cborError) {
+                      appendToConsole(text, "default");
+                    }
+                  }
+                } else {
+                  // If not a hex string, try CBOR
+                  try {
+                    const decodedMetadata = decodeMetadata(buffer);
+                    const result = typeof decodedMetadata === 'object' 
+                      ? JSON.stringify(decodedMetadata, null, 2)
+                      : `Value: ${decodedMetadata} (${typeof decodedMetadata})`;
+                    appendToConsole(result, "json");
+                  } catch (cborError) {
+                    appendToConsole(text, "default");
+                  }
                 }
               } catch (error) {
                 appendToConsole(`Error decoding metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
