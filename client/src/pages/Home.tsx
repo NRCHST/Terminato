@@ -132,12 +132,13 @@ export default function Home() {
         if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
           blockHeight = responseText.trim();
         } else {
-          // Try to extract just numeric content if possible
-          const numericMatch = responseText.match(/\d+/);
-          if (numericMatch) {
-            blockHeight = numericMatch[0];
+          // Look for a 6-digit or longer number that would be a block height
+          // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
+          const blockHeightMatch = responseText.match(/\d{6,}/);
+          if (blockHeightMatch) {
+            blockHeight = blockHeightMatch[0];
           } else {
-            // If we can't parse it properly, don't include it
+            // If we can't find a long number, don't include block height
             console.error("Invalid block height response:", responseText);
           }
         }
@@ -364,10 +365,11 @@ export default function Home() {
           if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
             height = responseText.trim();
           } else {
-            // Try to extract just numeric content if possible
-            const numericMatch = responseText.match(/\d+/);
-            if (numericMatch) {
-              height = numericMatch[0];
+            // Look for a 6-digit or longer number that would be a block height
+            // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
+            const blockHeightMatch = responseText.match(/\d{6,}/);
+            if (blockHeightMatch) {
+              height = blockHeightMatch[0];
             } else {
               appendToConsole("Could not parse block height from response", "error");
               return;
@@ -402,10 +404,11 @@ export default function Home() {
             if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
               blockHeight = responseText.trim();
             } else {
-              // Try to extract just numeric content if possible
-              const numericMatch = responseText.match(/\d+/);
-              if (numericMatch) {
-                blockHeight = numericMatch[0];
+              // Look for a 6-digit or longer number that would be a block height
+              // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
+              const blockHeightMatch = responseText.match(/\d{6,}/);
+              if (blockHeightMatch) {
+                blockHeight = blockHeightMatch[0];
               } else {
                 appendToConsole("Could not parse block height from response", "error");
                 return;
@@ -450,10 +453,11 @@ export default function Home() {
         if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
           height = responseText.trim();
         } else {
-          // Try to extract just numeric content if possible
-          const numericMatch = responseText.match(/\d+/);
-          if (numericMatch) {
-            height = numericMatch[0];
+          // Look for a 6-digit or longer number that would be a block height
+          // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
+          const blockHeightMatch = responseText.match(/\d{6,}/);
+          if (blockHeightMatch) {
+            height = blockHeightMatch[0];
           } else {
             appendToConsole("Could not parse block height from response", "error");
             return;
