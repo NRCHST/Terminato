@@ -121,85 +121,44 @@ export default function Home() {
       setBaseUrl("https://ordinals.com");
     }
     
-    // Try to get the block height for welcome message using a dedicated BLOCK HEIGHT command
+    // Get block height for welcome message
+    // Using the exact same method that works for BLOCK HEIGHT command
     try {
-      // First - just use the BLOCK HEIGHT command directly with no extra scraping
-      // Simple direct fetch with no parsing
-      const blockHeightCommand = async (): Promise<string | null> => {
+      // This code is copied from the BLOCK HEIGHT command handler
+      // Silent operation since this is just for the welcome message
+      
+      // Use exactly the same method as the BLOCK HEIGHT command
+      const getBlockHeight = async (): Promise<string | null> => {
+        // Method 1: Request with plain fetch
         try {
-          // Try the command with specific headers
-          const response = await fetch(`${baseUrl}/r/blockheight`, {
-            cache: 'no-store',
-            headers: {
-              'Accept': 'text/plain',
-              'Content-Type': 'text/plain'
-            }
-          });
+          const response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
           
-          if (!response.ok) return null;
-          
-          const text = await response.text();
-          // Strict validation: must be a number and in the valid Bitcoin block height range
-          // Current Bitcoin block height is ~893,644 (April 2025)
-          if (!isNaN(Number(text.trim()))) {
-            const height = Number(text.trim());
-            // Bitcoin block height should be in this range in 2025
-            if (height > 800000 && height < 900000) {
-              return text.trim();
+          if (response.ok) {
+            const text = await response.text();
+            
+            // Just extract all numbers - a later function will display this properly
+            const match = text.match(/\d{6,7}/);
+            if (match) {
+              return match[0];
             }
           }
-          return null;
         } catch (e) {
-          console.error("Direct height request failed:", e);
-          return null;
+          console.error("Height fetch failed:", e);
         }
+        
+        return null;
       };
       
-      // Try the direct command first
-      blockHeight = await blockHeightCommand();
-      
-      // If that failed, try a fallback
-      if (!blockHeight) {
-        try {
-          // Just hardcode the command we know works properly
-          appendToConsole("Running BLOCK HEIGHT command directly...", "default");
-          
-          // This is basically what our BLOCK HEIGHT command does
-          const getBlockHeight = async (): Promise<string | null> => {
-            try {
-              const response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
-              if (response.ok) {
-                const text = await response.text();
-                
-                // Look specifically for bitcoin block heights (800,000-900,000 range in 2025)
-                const matches = text.match(/\b(8\d{5}|9[0-8]\d{4})\b/g);
-                if (matches && matches.length > 0) {
-                  return matches[0];
-                }
-                
-                // If that didn't work, try a more general regex for 6-digit numbers
-                const sixDigitMatch = text.match(/\b\d{6}\b/g);
-                if (sixDigitMatch && sixDigitMatch.length > 0) {
-                  // Verify it's in a reasonable range for Bitcoin (over 800,000)
-                  const num = parseInt(sixDigitMatch[0], 10);
-                  if (num > 800000 && num < 900000) {
-                    return sixDigitMatch[0];
-                  }
-                }
-              }
-              return null;
-            } catch (e) {
-              return null;
-            }
-          };
-          
-          blockHeight = await getBlockHeight();
-        } catch (e) {
-          console.error("Fallback height attempt failed:", e);
-        }
+      // Get the height using the same method as BLOCK HEIGHT command
+      const heightResult = await getBlockHeight();
+      if (heightResult) {
+        blockHeight = heightResult;
+        console.log("Block height for welcome:", blockHeight);
+      } else {
+        // If we couldn't get the block height, don't show it in the welcome message
+        // This is handled in the welcome message construction below
+        console.log("Unable to get block height for welcome message");
       }
-      
-      console.log("Block height for welcome:", blockHeight);
     } catch (error) {
       console.error("Error fetching block height:", error);
     }
@@ -216,9 +175,13 @@ export default function Home() {
     welcomeMessage += ` The time is ${systemTime}`;
     
     if (blockHeight) {
-      welcomeMessage += ` and the latest block was ${blockHeight}`;
-      if (blockTimeFormatted) {
-        welcomeMessage += ` at ${blockTimeFormatted}`;
+      // Only include block height in the welcome message if it's a "reasonable" Bitcoin height
+      // This prevents any weird scraping issues from including bad data
+      if (blockHeight.length >= 6 && parseInt(blockHeight, 10) > 750000) {
+        welcomeMessage += ` and the latest block was ${blockHeight}`;
+        if (blockTimeFormatted) {
+          welcomeMessage += ` at ${blockTimeFormatted}`;
+        }
       }
     }
     welcomeMessage += ".";
