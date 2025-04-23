@@ -132,7 +132,11 @@ export default function Home() {
         appendToConsole(`${commandName} - ${command.description}`, "system");
         appendToConsole(`Usage: ${command.usage}`, "default");
         if (command.details) {
-          appendToConsole(command.details, "default");
+          // Split details by lines and display each line separately for proper formatting
+          const lines = command.details.split('\n');
+          lines.forEach(line => {
+            appendToConsole(line, "default");
+          });
         }
       } else {
         appendToConsole(`No help available for '${commandName}'. Type HELP to see available commands.`, "error");
