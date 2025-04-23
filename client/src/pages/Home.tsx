@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import * as CBOR from 'cbor-js';
 
 type ConsoleEntryType = "input" | "error" | "success" | "system" | "json" | "default";
 
@@ -249,35 +248,19 @@ export default function Home() {
             response = await fetch(url);
             
             if (response.ok) {
-              // Get the raw data for processing
-              const arrayBuffer = await response.arrayBuffer();
-              
-              if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+              // First try to get metadata as JSON
+              const text = await response.text();
+              if (!text || text.trim() === "") {
                 appendToConsole("METADATA: No metadata available for this inscription", "system");
               } else {
                 appendToConsole("METADATA:", "success");
-                
                 try {
-                  // First try to parse as CBOR
-                  try {
-                    const cborData = CBOR.decode(arrayBuffer);
-                    appendToConsole("CBOR metadata decoded successfully:", "success");
-                    appendToConsole(JSON.stringify(cborData, null, 2), "json");
-                    return;
-                  } catch (cborError) {
-                    // If CBOR fails, try as JSON
-                    const text = new TextDecoder().decode(arrayBuffer);
-                    try {
-                      const jsonData = JSON.parse(text);
-                      appendToConsole(JSON.stringify(jsonData, null, 2), "json");
-                    } catch (jsonError) {
-                      // If not JSON either, display as text
-                      appendToConsole("Raw metadata content (not CBOR or JSON):", "default");
-                      appendToConsole(text, "default");
-                    }
-                  }
-                } catch (error) {
-                  appendToConsole(`Error processing metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+                  // Try to parse as JSON first
+                  const jsonData = JSON.parse(text);
+                  appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+                } catch (parseError) {
+                  // If not JSON, just display the raw text
+                  appendToConsole(text, "default");
                 }
               }
             } else {
@@ -315,34 +298,19 @@ export default function Home() {
           response = await fetch(url);
           
           if (response.ok) {
-            // Get the raw data for processing
-            const arrayBuffer = await response.arrayBuffer();
-            
-            if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+            // Get the text content of the metadata
+            const text = await response.text();
+            if (!text || text.trim() === "") {
               appendToConsole("No metadata available for this inscription", "system");
             } else {
               appendToConsole("METADATA:", "success");
-              
               try {
-                // First try to parse as CBOR
-                try {
-                  const cborData = CBOR.decode(arrayBuffer);
-                  appendToConsole("CBOR metadata decoded successfully:", "success");
-                  appendToConsole(JSON.stringify(cborData, null, 2), "json");
-                } catch (cborError) {
-                  // If CBOR fails, try as JSON
-                  const text = new TextDecoder().decode(arrayBuffer);
-                  try {
-                    const jsonData = JSON.parse(text);
-                    appendToConsole(JSON.stringify(jsonData, null, 2), "json");
-                  } catch (jsonError) {
-                    // If not JSON either, display as text
-                    appendToConsole("Raw metadata content (not CBOR or JSON):", "default");
-                    appendToConsole(text, "default");
-                  }
-                }
-              } catch (error) {
-                appendToConsole(`Error processing metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+                // Try to parse as JSON first
+                const jsonData = JSON.parse(text);
+                appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+              } catch (parseError) {
+                // If not JSON, just display the raw text
+                appendToConsole(text, "default");
               }
             }
           } else {
