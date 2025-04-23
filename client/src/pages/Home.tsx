@@ -121,51 +121,52 @@ export default function Home() {
       setBaseUrl("https://ordinals.com");
     }
     
-    // Now get the block height directly using a dedicated call
+    // Now get the block height for welcome message
     try {
-      // First attempt: get clean block height without HTML
-      const fetchDirectHeight = async () => {
-        const heightUrl = `${baseUrl}/r/blockheight`;
-        try {
-          // Fetch with text/plain accept header to try to get clean response
-          const response = await fetch(heightUrl, {
-            cache: 'no-store',
-            headers: {
-              'Accept': 'text/plain'
-            }
-          });
-          
-          if (!response.ok) return null;
-          
-          const text = await response.text();
-          // If it's a clean numeric response, use it
-          if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
-            return text.trim();
-          }
-          return null;
-        } catch (e) {
-          return null;
-        }
-      };
+      // Simplified version just for the welcome message
+      const heightUrl = `${baseUrl}/r/blockheight`;
+      const heightResponse = await fetch(heightUrl, { cache: 'no-store' });
       
-      // Try direct method first
-      const directHeight = await fetchDirectHeight();
-      if (directHeight) {
-        blockHeight = directHeight;
-      } else {
-        // If direct doesn't work, use BLOCK HEIGHT command method
+      if (heightResponse.ok) {
+        const responseText = await heightResponse.text();
+        
+        // First attempt - direct parsing if it's a clean number
+        if (responseText && !isNaN(Number(responseText.trim())) && responseText.trim().length < 12) {
+          blockHeight = responseText.trim();
+        } 
+        // Second attempt - find a 6-digit number in the response which is likely the block height
+        else {
+          // Look for bitcoin block height which is 6+ digits (currently ~893,644)
+          const match = responseText.match(/\d{6,7}/);
+          if (match) {
+            blockHeight = match[0];
+          } else {
+            // If we don't get an exact match from HTML, look for any number
+            const simpleMatch = responseText.match(/\d+/);
+            if (simpleMatch && simpleMatch[0].length > 4) {
+              blockHeight = simpleMatch[0];
+            }
+          }
+        }
+      }
+      
+      // If that didn't work, try the /height endpoint as backup
+      if (!blockHeight) {
         try {
-          const heightResponse = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
-          if (heightResponse.ok) {
-            const text = await heightResponse.text();
-            if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+          const altResponse = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+          if (altResponse.ok) {
+            const text = await altResponse.text();
+            if (text && !isNaN(Number(text.trim()))) {
               blockHeight = text.trim();
             }
           }
         } catch (e) {
-          console.error("Second height attempt failed:", e);
+          console.error("Alternate height fetch failed:", e);
         }
       }
+      
+      // If we still don't have a block height, just display the welcome without it
+      console.log("Block height for welcome:", blockHeight);
     } catch (error) {
       console.error("Error fetching block height:", error);
     }
