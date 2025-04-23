@@ -168,13 +168,13 @@ export default function Home() {
       let response;
       let data;
       
-      // Determine if this is a LATEST request or a specific block hash/height
-      if (args.length === 0 || args[0].toUpperCase() === "LATEST") {
+      // If no arguments, get the latest block info
+      if (args.length === 0) {
         // Get the latest block info
-        url = `${baseUrl}/r/blockinfo/$(${baseUrl}/r/blockheight)`;
         response = await fetch(`${baseUrl}/r/blockheight`);
         const height = await response.text();
         url = `${baseUrl}/r/blockinfo/${height}`;
+        appendToConsole(`Retrieving latest block (height: ${height})...`, "default");
         response = await fetch(url);
         data = await response.json();
         appendToConsole(JSON.stringify(data, null, 2), "json");
@@ -182,6 +182,7 @@ export default function Home() {
         // Handle block by hash or height
         const blockId = args[0]; // Could be a hash or height
         url = `${baseUrl}/r/blockinfo/${blockId}`;
+        appendToConsole(`Retrieving block ${blockId}...`, "default");
         response = await fetch(url);
         data = await response.json();
         appendToConsole(JSON.stringify(data, null, 2), "json");
@@ -466,10 +467,10 @@ MODE LIVE : switches to LIVE mode, without https://ordinals.com prefix for recur
     },
     BLOCK: {
       description: "Retrieve block information.",
-      usage: "BLOCK [LATEST|<hash or height>]",
+      usage: "BLOCK [<hash or height>]",
       details: 
-`BLOCK LATEST : get latest block info
-BLOCK {hash/height} : get block info at specified HASH or HEIGHT`,
+`BLOCK : get latest block info
+BLOCK <hash/height> : get block info at specified HASH or HEIGHT`,
       handler: handleBlock
     },
     INSCRIPTION: {
