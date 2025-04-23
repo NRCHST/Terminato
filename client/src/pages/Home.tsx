@@ -418,20 +418,14 @@ export default function Home() {
                 appendToConsole("METADATA:", "success");
                 
                 try {
-                  // Try first as JSON
-                  const text = new TextDecoder().decode(buffer);
+                  // Try as CBOR first (primary method)
                   try {
-                    const jsonData = JSON.parse(text);
-                    appendToConsole(JSON.stringify(jsonData, null, 2), "json");
-                  } catch (jsonError) {
-                    // Not JSON, try CBOR
-                    try {
-                      const decodedMetadata = decodeMetadata(buffer);
-                      appendToConsole(decodedMetadata, "json");
-                    } catch (cborError) {
-                      // If neither JSON nor CBOR, display as text
-                      appendToConsole(text, "default");
-                    }
+                    const decodedMetadata = decodeMetadata(buffer);
+                    appendToConsole(decodedMetadata, "json");
+                  } catch (cborError) {
+                    // If CBOR fails, fall back to plain text
+                    const text = new TextDecoder().decode(buffer);
+                    appendToConsole(text, "default");
                   }
                 } catch (error) {
                   appendToConsole(`Error decoding metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
@@ -480,20 +474,14 @@ export default function Home() {
               appendToConsole("METADATA:", "success");
               
               try {
-                // Try first as JSON
-                const text = new TextDecoder().decode(buffer);
+                // Try as CBOR first (primary method)
                 try {
-                  const jsonData = JSON.parse(text);
-                  appendToConsole(JSON.stringify(jsonData, null, 2), "json");
-                } catch (jsonError) {
-                  // Not JSON, try CBOR
-                  try {
-                    const decodedMetadata = decodeMetadata(buffer);
-                    appendToConsole(decodedMetadata, "json");
-                  } catch (cborError) {
-                    // If neither JSON nor CBOR, display as text
-                    appendToConsole(text, "default");
-                  }
+                  const decodedMetadata = decodeMetadata(buffer);
+                  appendToConsole(decodedMetadata, "json");
+                } catch (cborError) {
+                  // If CBOR fails, fall back to plain text
+                  const text = new TextDecoder().decode(buffer);
+                  appendToConsole(text, "default");
                 }
               } catch (error) {
                 appendToConsole(`Error decoding metadata: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
