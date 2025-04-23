@@ -471,9 +471,14 @@ export default function Home() {
           
           appendToConsole(`Successfully processed ${fullSats.length} sat entries for page ${page}.`, "success");
           
-          // Store the processed data
+          // Store the processed data with string keys for consistency
+          const pageKey = String(page);
           const updatedPages = { ...ociData.loadedPages };
-          updatedPages[page] = filledArray;
+          updatedPages[pageKey] = filledArray;
+          
+          // Debug log to verify data is being saved
+          console.log(`Storing page ${pageKey} with ${filledArray.length} entries`);
+          
           setOciData({
             ...ociData,
             loadedPages: updatedPages
@@ -500,16 +505,18 @@ export default function Home() {
       // Determine which page this bitmap is in
       const page = Math.floor(districtNumber / 100000);
       
-      // If the page is not loaded yet, load it
-      if (!ociData.loadedPages[page]) {
+      // Check if the page is already loaded using string key
+      const pageKey = String(page);
+      
+      if (!ociData.loadedPages[pageKey]) {
+        console.log(`Page ${pageKey} not loaded yet, loading now...`);
         const pageData = await loadDistrictPage(page);
         if (!pageData) {
           return null;
         }
+      } else {
+        console.log(`Page ${pageKey} already loaded with ${ociData.loadedPages[pageKey].length} entries`);
       }
-      
-      // Convert page to string key for consistent access
-      const pageKey = String(page);
       
       // Make sure the page data exists
       if (!ociData.loadedPages[pageKey] || !Array.isArray(ociData.loadedPages[pageKey])) {
