@@ -111,11 +111,15 @@ export default function Home() {
   const handleHelp = (args: string[]) => {
     if (args.length === 0) {
       appendToConsole("For more information on a specific command, type HELP command-name. Your options are:", "system");
-      appendToConsole("Configuration:", "system");
+      
+      // Configuration section with different color
+      appendToConsole("Configuration:", "success");
       appendToConsole("MODE - Switch between TEST and LIVE mode", "default");
       appendToConsole("CLEAR - Clear the console", "default");
       appendToConsole("", "default");
-      appendToConsole("Ordinals Recursive Endpoints:", "system");
+      
+      // Ordinals section with different color
+      appendToConsole("Ordinals Recursive Endpoints:", "success");
       appendToConsole("BLOCK - Retrieve block information", "default");
       appendToConsole("INSCRIPTION - Query inscription data", "default");
       appendToConsole("SAT - Get information about specific satoshis", "default");
@@ -194,30 +198,100 @@ export default function Home() {
   };
   
   const handleInscription = async (args: string[]) => {
-    if (args.length < 2) {
-      appendToConsole("Please specify an INSCRIPTION subcommand and ID. Type HELP INSCRIPTION for options.", "error");
+    if (args.length === 0) {
+      appendToConsole("Please specify an inscription ID. Type HELP INSCRIPTION for options.", "error");
       return;
     }
     
-    const subcommand = args[0].toUpperCase();
-    const inscriptionId = args[1];
     setIsProcessing(true);
     
     try {
+      // First argument is always the inscription ID
+      const inscriptionId = args[0];
+      
+      // Second argument is the optional subcommand
+      let subcommand = args.length > 1 ? args[1].toUpperCase() : "ALL";
+      
       let url;
       let response;
+      let data;
+      let contentUrl;
       
       switch (subcommand) {
+        case "ALL":
+          // Return all available information
+          appendToConsole(`Retrieving all information for inscription ${inscriptionId}:`, "system");
+          
+          // Get inscription info
+          url = `${baseUrl}/r/inscription/${inscriptionId}`;
+          try {
+            response = await fetch(url);
+            if (response.ok) {
+              data = await response.json();
+              appendToConsole("INFO:", "success");
+              appendToConsole(JSON.stringify(data, null, 2), "json");
+            }
+          } catch (error) {
+            appendToConsole(`Error fetching INFO: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+          }
+          
+          // Get content link
+          contentUrl = `${baseUrl}/content/${inscriptionId}`;
+          appendToConsole("CONTENT:", "success");
+          appendToConsole(`To view content, visit: ${contentUrl}`, "default");
+          
+          // Get metadata if available
+          try {
+            url = `${baseUrl}/r/inscription/${inscriptionId}/metadata`;
+            response = await fetch(url);
+            if (response.ok) {
+              data = await response.json();
+              appendToConsole("METADATA:", "success");
+              appendToConsole(JSON.stringify(data, null, 2), "json");
+            }
+          } catch (error) {
+            appendToConsole(`Error fetching METADATA: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+          }
+          break;
+          
         case "CONTENT":
           url = `${baseUrl}/content/${inscriptionId}`;
           appendToConsole(`Retrieving content from: ${url}`, "default");
           appendToConsole(`To view content, visit: ${url}`, "success");
           break;
           
+        case "UNDELEGATED":
+          // Assuming this is a separate endpoint for undelegated content
+          url = `${baseUrl}/content/${inscriptionId}?undelegated=true`;
+          appendToConsole(`Retrieving undelegated content from: ${url}`, "default");
+          appendToConsole(`To view undelegated content, visit: ${url}`, "success");
+          break;
+          
+        case "INFO":
+          url = `${baseUrl}/r/inscription/${inscriptionId}`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        case "METADATA":
+          url = `${baseUrl}/r/inscription/${inscriptionId}/metadata`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        case "PARENTS":
+          url = `${baseUrl}/r/parents/${inscriptionId}`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
         case "CHILDREN":
           url = `${baseUrl}/r/children/${inscriptionId}`;
           response = await fetch(url);
-          const data = await response.json();
+          data = await response.json();
           appendToConsole(JSON.stringify(data, null, 2), "json");
           break;
           
@@ -359,8 +433,8 @@ export default function Home() {
     },
     INSCRIPTION: {
       description: "Query inscription data.",
-      usage: "INSCRIPTION [CONTENT|CHILDREN] <inscription_id>",
-      details: "INSCRIPTION CONTENT <id> : Get content of an inscription\nINSCRIPTION CHILDREN <id> : Get child inscriptions",
+      usage: "INSCRIPTION <inscription_id> [ALL|CONTENT|UNDELEGATED|INFO|METADATA|PARENTS|CHILDREN]",
+      details: "INSCRIPTION <inscription_id> : This is the main command, resolves ALL by default\nINSCRIPTION <inscription_id> ALL : Returns content, info, metadata\nINSCRIPTION <inscription_id> CONTENT : Return content only of inscription\nINSCRIPTION <inscription_id> UNDELEGATED : Return undelegated content of inscription\nINSCRIPTION <inscription_id> INFO : Return inscription info\nINSCRIPTION <inscription_id> METADATA : Returns inscription METADATA\nINSCRIPTION <inscription_id> PARENTS : Returns inscription PARENTS\nINSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN",
       handler: handleInscription
     },
     SAT: {
