@@ -508,8 +508,17 @@ export default function Home() {
         }
       }
       
+      // Convert page to string key for consistent access
+      const pageKey = String(page);
+      
+      // Make sure the page data exists
+      if (!ociData.loadedPages[pageKey] || !Array.isArray(ociData.loadedPages[pageKey])) {
+        appendToConsole(`Error: Data for district page ${page} is not available or invalid`, "error");
+        return null;
+      }
+      
       // Return the sat number for this district
-      return ociData.loadedPages[page][districtNumber % 100000];
+      return ociData.loadedPages[pageKey][districtNumber % 100000];
     };
     
     // Function to get the sat index for a district (most are 0, but some are higher)
@@ -556,7 +565,8 @@ export default function Home() {
         
         let loadedPageCount = 0;
         for (let i = 0; i < 9; i++) {
-          if (!ociData.loadedPages[i]) {
+          const pageKey = String(i);
+          if (!ociData.loadedPages[pageKey]) {
             const pageData = await loadDistrictPage(i);
             if (pageData) {
               loadedPageCount++;
