@@ -24,21 +24,7 @@ export default function Home() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(true);
-  
-  // Define OCI data type for Bitcoin Districts
-  interface OciDataType {
-    loaded: boolean;
-    pageUrls: string[];
-    satIndices: Record<number, number>;
-    loadedPages: Record<string, number[]>;
-  }
-  
-  const [ociData, setOciData] = useState<OciDataType>({
-    loaded: false,
-    pageUrls: [],
-    satIndices: {},
-    loadedPages: {}
-  });
+  const [ociData, setOciData] = useState<any>(null);
   const [ociLoaded, setOciLoaded] = useState(false);
   
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -51,263 +37,753 @@ export default function Home() {
     }
   }, [consoleEntries]);
   
-  // Focus the input field when the component loads
+  // Focus the input when the component mounts and auto-detect mode
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, []);
-  
-  // Initialize with default settings and welcome message
-  useEffect(() => {
-    // Check connectivity mode and set defaults
-    checkConnectivityMode();
     
-    // Run after connectivity check
-    setTimeout(() => {
-      appendToConsole("Welcome to Termina - Bitcoin Ordinals Recursion Console", "success");
-      appendToConsole("Type HELP for available commands", "system");
-      setIsProcessing(false);
-    }, 100);
+    // Auto-detect mode on startup
+    detectMode();
   }, []);
   
-  // Function to check available connectivity mode
-  const checkConnectivityMode = async () => {
+  // Function to detect mode (ORD or WEB)
+  const detectMode = async () => {
+    appendToConsole("Testing connectivity modes...", "default");
+    
+    // Try ORD mode first (local server)
+    let ordModeWorks = false;
+    
     try {
-      // Try WEB mode first
-      const webUrl = "https://ordinals.com";
+      const ordResponse = await fetch("/r/blocktime", { 
+        signal: AbortSignal.timeout(3000),
+        // Add cache: 'no-store' to prevent caching issues
+        cache: 'no-store' 
+      });
       
-      try {
-        const webResponse = await fetch(`${webUrl}/r/blockhash/0`, { cache: 'no-store' });
-        
-        if (webResponse.ok) {
-          setCurrentMode("WEB");
-          setBaseUrl(webUrl);
-          appendToConsole("Connected successfully using WEB mode", "success");
-          appendToConsole("Using ordinals.com as the endpoint", "default");
-          return;
+      // Check not just if response is ok, but also that we can get actual data
+      if (ordResponse.ok) {
+        const data = await ordResponse.text();
+        // Verify we got a valid Unix timestamp (numeric response)
+        if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
+          ordModeWorks = true;
+          appendToConsole("Local ORD server detected!", "success");
         }
-      } catch (error) {
-        console.log("Web mode check failed:", error);
       }
-      
-      // Check ORD mode
-      const localUrl = "";
-      
-      try {
-        const localResponse = await fetch(`${localUrl}/r/blockhash/0`, { cache: 'no-store' });
-        
-        if (localResponse.ok) {
-          setCurrentMode("ORD");
-          setBaseUrl(localUrl);
-          appendToConsole("Connected successfully using ORD mode", "success");
-          appendToConsole("Using local ord server", "default");
-          return;
-        }
-      } catch (error) {
-        console.log("Ord mode check failed:", error);
-      }
-      
-      // If neither mode works, default to WEB mode
-      setCurrentMode("WEB");
-      setBaseUrl("https://ordinals.com");
-      appendToConsole("Could not verify connection, defaulting to WEB mode", "default");
-      
     } catch (error) {
-      console.error("Error checking connectivity:", error);
+      appendToConsole("No local ORD server detected.", "default");
+    }
+    
+    // Try WEB mode
+    let webModeWorks = false;
+    try {
+      const webResponse = await fetch("https://ordinals.com/r/blocktime", { 
+        signal: AbortSignal.timeout(5000),
+        cache: 'no-store' 
+      });
+      
+      if (webResponse.ok) {
+        const data = await webResponse.text();
+        // Verify we got a valid Unix timestamp (numeric response)
+        if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
+          webModeWorks = true;
+          appendToConsole("Web connectivity detected!", "success");
+        }
+      }
+    } catch (error) {
+      appendToConsole("Web connectivity failed.", "error");
+    }
+    
+    // Set the mode based on which connection worked and generate welcome message
+    const now = new Date();
+    const systemTime = now.toLocaleString();
+    
+    let welcomeMessage = "";
+    
+    // Set the appropriate mode
+    if (ordModeWorks) {
+      setCurrentMode("ORD");
+      setBaseUrl("");
+      appendToConsole("Using ORD mode.", "success");
+    } else if (webModeWorks) {
       setCurrentMode("WEB");
       setBaseUrl("https://ordinals.com");
-      appendToConsole("Error checking connectivity, defaulting to WEB mode", "error");
+      appendToConsole("Using WEB mode.", "success");
+    } else {
+      // If both modes failed
+      appendToConsole("Could not connect to either local ORD server or ordinals.com", "error");
+      appendToConsole("Defaulting to WEB mode. You may need to change modes manually.", "system");
+      setCurrentMode("WEB");
+      setBaseUrl("https://ordinals.com");
     }
+    
+    // No block height or block time fetch for the welcome message 
+    // Just proceed with a simple welcome message
+    
+    // Construct welcome message - simplified without block height
+    welcomeMessage = `Welcome to Termina. You are in ${currentMode} mode.`;
+    welcomeMessage += ` The time is ${systemTime}.`;
+    
+    appendToConsole(welcomeMessage, "system");
+    appendToConsole("Type HELP to see your options.", "system");
+    
+    // Enable user input
+    setIsProcessing(false);
   };
   
-  // Helper to add a message to the console
+  // Append text to the console
   const appendToConsole = (text: string, type: ConsoleEntryType = "default") => {
     setConsoleEntries(prev => [...prev, { text, type }]);
   };
   
-  // Handle command input when the user presses Enter
+  // Escape HTML to prevent XSS
+  const escapeHtml = (unsafe: string): string => {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+  
+  // Format JSON with syntax highlighting
+  const formatJsonOutput = (jsonString: string): string => {
+    return escapeHtml(jsonString)
+      .replace(/(".*?")/g, '<span class="text-blue-400">$1</span>')
+      .replace(/\b(true|false|null)\b/g, '<span class="text-red-400">$1</span>')
+      .replace(/\b(\d+)\b/g, '<span class="text-green-400">$1</span>');
+  };
+  
+  // Handle command input
   const handleCommandInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !isProcessing) {
+    if (e.key === 'Enter' && !isProcessing) {
       const command = inputValue.trim();
       
       if (command) {
-        // Add to console and history
-        appendToConsole(command, "input");
+        // Add to history
         setCommandHistory(prev => [command, ...prev]);
         setHistoryIndex(-1);
         
-        // Process the command
+        // Display command
+        appendToConsole(command, "input");
+        
+        // Process command
         processCommand(command);
         
-        // Clear the input
-        setInputValue("");
+        // Clear input
+        setInputValue('');
       }
-    } else if (e.key === "ArrowUp") {
-      // Navigate command history (newer to older)
+    } 
+    // Command history navigation (up/down arrows)
+    else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      
-      if (commandHistory.length > 0) {
-        const newIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+      if (historyIndex < commandHistory.length - 1) {
+        const newIndex = historyIndex + 1;
         setHistoryIndex(newIndex);
         setInputValue(commandHistory[newIndex]);
       }
-    } else if (e.key === "ArrowDown") {
-      // Navigate command history (older to newer)
+    }
+    else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      
       if (historyIndex > 0) {
         const newIndex = historyIndex - 1;
         setHistoryIndex(newIndex);
         setInputValue(commandHistory[newIndex]);
       } else if (historyIndex === 0) {
         setHistoryIndex(-1);
-        setInputValue("");
+        setInputValue('');
       }
     }
   };
   
-  // Helper function to format JSON output with syntax highlighting
-  const formatJsonOutput = (jsonString: string) => {
-    return jsonString
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"(\w+)":/g, '<span style="color: #9CDCFE;">\"$1\"</span>:')
-      .replace(/"([^"]+)"(?!:)/g, '<span style="color: #CE9178;">\"$1\"</span>')
-      .replace(/\b(true|false|null)\b/g, '<span style="color: #569CD6;">$1</span>')
-      .replace(/\b(\d+\.?\d*)\b/g, '<span style="color: #B5CEA8;">$1</span>');
-  };
-  
-  // Handler for HELP command
+  // Command handlers
   const handleHelp = (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length > 0) {
-      // Help for a specific command
-      const commandName = args[0].toUpperCase();
+    if (args.length === 0) {
+      appendToConsole("For more information on a specific command, type HELP command-name. Your options are:", "system");
       
+      // Configuration section with different color
+      appendToConsole("Configuration:", "success");
+      appendToConsole("MODE - Switch between WEB and ORD mode", "default");
+      appendToConsole("CLEAR - Clear the console", "default");
+      appendToConsole("TIME - Display current system time", "default");
+      appendToConsole("", "default");
+      
+      // Ordinals section with different color
+      appendToConsole("Ordinals Recursive Endpoints:", "success");
+      appendToConsole("BLOCK - Retrieve block information (height, hash, time)", "default");
+      appendToConsole("INSCRIPTION - Query inscription data", "default");
+      appendToConsole("SAT - Get information about specific satoshis", "default");
+      appendToConsole("TRANSACTION - Query transaction data", "default");
+      appendToConsole("UTXO - View UTXO information", "default");
+      appendToConsole("", "default");
+      
+      // Bitcoin Districts Bitmap section
+      appendToConsole("Bitcoin Districts Bitmap:", "success");
+      appendToConsole("OCI - On-Chain Index for Bitcoin Districts (0-839999)", "default");
+    } else {
+      const commandName = args[0].toUpperCase();
       if (commandName in commands) {
-        const cmd = commands[commandName as keyof typeof commands];
-        appendToConsole(`Command: ${commandName}`, "success");
-        appendToConsole(`Description: ${cmd.description}`, "default");
-        appendToConsole(`Usage: ${cmd.usage}`, "default");
-        
-        if (cmd.details) {
-          appendToConsole(`Details:`, "default");
-          appendToConsole(cmd.details, "default");
+        const command = commands[commandName as keyof typeof commands];
+        appendToConsole(`${commandName} - ${command.description}`, "system");
+        appendToConsole(`Usage: ${command.usage}`, "default");
+        if (command.details) {
+          // Split details by lines and display each line separately for proper formatting
+          const lines = command.details.split('\n');
+          lines.forEach(line => {
+            appendToConsole(line, "default");
+          });
         }
       } else {
-        appendToConsole(`No help available for ${commandName}. Type HELP to see all commands.`, "error");
+        appendToConsole(`No help available for '${commandName}'. Type HELP to see available commands.`, "error");
       }
-    } else {
-      // General help - list all commands
-      appendToConsole("Available Commands:", "success");
-      appendToConsole("-------------------", "default");
-      
-      Object.entries(commands).forEach(([name, cmd]) => {
-        appendToConsole(`${name}: ${cmd.description}`, "default");
-      });
-      
-      appendToConsole("", "default");
-      appendToConsole("Type 'HELP <command>' for detailed information about a specific command.", "default");
     }
-    
-    setIsProcessing(false);
   };
   
-  // Handler for MODE command 
   const handleMode = (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length > 0) {
-      const newMode = args[0].toUpperCase();
-      
-      if (newMode === "WEB") {
-        setCurrentMode("WEB");
-        setBaseUrl("https://ordinals.com");
-        appendToConsole("Switched to WEB mode (using ordinals.com)", "success");
-      } else if (newMode === "ORD") {
-        setCurrentMode("ORD");
-        setBaseUrl("");
-        appendToConsole("Switched to ORD mode (using local ord server)", "success");
-      } else {
-        appendToConsole(`Invalid mode: ${newMode}. Use WEB or ORD.`, "error");
-      }
-    } else {
+    if (args.length === 0) {
       appendToConsole(`Current mode: ${currentMode}`, "success");
-      appendToConsole(`Base URL: ${baseUrl || '(local ord server)'}`, "default");
-    }
-    
-    setIsProcessing(false);
-  };
-  
-  // Handler for INSCRIPTION command
-  const handleInscription = async (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length < 1) {
-      appendToConsole("Missing inscription ID. Usage: INSCRIPTION <inscription_id> [CONTENT|UNDELEGATED|INFO|METADATA|PARENTS|CHILDREN]", "error");
-      setIsProcessing(false);
       return;
     }
     
-    const inscriptionId = args[0];
-    let inscriptionAction = args.length > 1 ? args[1].toUpperCase() : "INFO";
+    const mode = args[0].toUpperCase();
+    if (mode === "WEB") {
+      setCurrentMode("WEB");
+      setBaseUrl("https://ordinals.com");
+      appendToConsole("Switched to WEB mode. Using https://ordinals.com prefix.", "success");
+    } else if (mode === "ORD") {
+      setCurrentMode("ORD");
+      setBaseUrl("");
+      appendToConsole("Switched to ORD mode. Using no prefix (requires local ord server).", "success");
+    } else {
+      appendToConsole(`Invalid mode: ${mode}. Available modes: WEB, ORD`, "error");
+    }
+  };
+  
+  const handleBlock = async (args: string[]) => {
+    setIsProcessing(true);
     
     try {
-      let url = `${baseUrl}/r/`;
+      let url;
+      let response;
+      let data;
       
-      switch (inscriptionAction) {
-        case "CONTENT":
-          url += `content/${inscriptionId}`;
-          break;
-        case "UNDELEGATED":
-          url += `undelegated/${inscriptionId}`;
-          break;
-        case "METADATA":
-          url += `metadata/${inscriptionId}`;
-          break;
-        case "PARENTS":
-          url += `parents/${inscriptionId}`;
-          break;
-        case "CHILDREN":
-          url += `children/${inscriptionId}`;
-          break;
-        default:
-          url += `inscription/${inscriptionId}`;
-          inscriptionAction = "INFO";
-          break;
-      }
-      
-      appendToConsole(`Fetching ${inscriptionAction} for inscription ${inscriptionId}...`, "default");
-      
-      const response = await fetch(url, { cache: 'no-store' });
-      
-      if (!response.ok) {
-        appendToConsole(`Error: Could not retrieve data. Server responded with ${response.status}`, "error");
-        setIsProcessing(false);
+      // Check for BLOCKTIME or BLOCK TIME command
+      if (args.length > 0 && (args[0].toUpperCase() === "TIME" || args[0].toUpperCase() === "BLOCKTIME")) {
+        // Get the raw blocktime from API
+        url = `${baseUrl}/r/blocktime`;
+        
+        // Check for additional options
+        const option = args.length > 1 ? args[1].toUpperCase() : "";
+        
+        response = await fetch(url, { cache: 'no-store' });
+        
+        if (!response.ok) {
+          appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+          return;
+        }
+        
+        const blockTime = await response.text();
+        
+        // Check if the response is a valid Unix timestamp (numeric)
+        if (!isNaN(Number(blockTime.trim()))) {
+          const timestamp = Number(blockTime.trim()) * 1000;
+          const date = new Date(timestamp);
+          const localDateTime = date.toLocaleString(); // Uses system timezone
+          
+          if (option === "UNIX") {
+            // Unix timestamp only
+            appendToConsole(`Current block time (Unix): ${blockTime}`, "success");
+          } else if (option === "LOCAL") {
+            // Local time only
+            appendToConsole(`Current block time (Local): ${localDateTime}`, "success");
+          } else {
+            // Both formats (default)
+            appendToConsole(`Current block time: ${blockTime} (${localDateTime})`, "success");
+          }
+        } else {
+          appendToConsole(`Current block time: ${blockTime}`, "success");
+        }
         return;
       }
       
-      // Try to get as JSON first, then fall back to text
-      const contentType = response.headers.get("content-type");
-      let text = await response.text();
+      // Handle HEIGHT or HASH commands
+      if (args.length > 0) {
+        const command = args[0].toUpperCase();
+        
+        if (command === "HEIGHT") {
+          // Get latest block height
+          appendToConsole("Fetching latest block height...", "default");
+          
+          // Define a function to try different methods of getting block height
+          const getBlockHeight = async (): Promise<string | null> => {
+            // Method 1: Simple request with text/plain header
+            try {
+              const response = await fetch(`${baseUrl}/r/blockheight`, {
+                cache: 'no-store',
+                headers: {
+                  'Accept': 'text/plain'
+                }
+              });
+              
+              if (response.ok) {
+                const text = await response.text();
+                if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                  return text.trim();
+                }
+              }
+            } catch (e) {
+              console.error("First height method failed:", e);
+            }
+            
+            // Method 2: Try /r/height endpoint 
+            try {
+              const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+              if (response.ok) {
+                const text = await response.text();
+                if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                  return text.trim();
+                }
+              }
+            } catch (e) {
+              console.error("Second height method failed:", e);
+            }
+            
+            // Method 3: Try a block info request to extract height
+            try {
+              const response = await fetch(`${baseUrl}/r/blockinfo/tip`, { cache: 'no-store' });
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.height && !isNaN(Number(data.height))) {
+                  return data.height.toString();
+                }
+              }
+            } catch (e) {
+              console.error("Third height method failed:", e);
+            }
+            
+            return null;
+          };
+          
+          // Try to get the height
+          const height = await getBlockHeight();
+          
+          if (height) {
+            appendToConsole(`Current block height: ${height}`, "success");
+          } else {
+            appendToConsole("Could not retrieve block height", "error");
+          }
+          return;
+        }
+        
+        if (command === "HASH") {
+          // Get block hash
+          let blockHeight;
+          
+          if (args.length > 1) {
+            // Get hash for specific height
+            blockHeight = args[1];
+            appendToConsole(`Fetching block hash for height ${blockHeight}...`, "default");
+          } else {
+            // Get hash for latest block
+            appendToConsole("Fetching latest block hash...", "default");
+            
+            // Define a function to try different methods of getting block height
+            const getBlockHeight = async (): Promise<string | null> => {
+              // Method 1: Simple request with text/plain header
+              try {
+                const response = await fetch(`${baseUrl}/r/blockheight`, {
+                  cache: 'no-store',
+                  headers: {
+                    'Accept': 'text/plain'
+                  }
+                });
+                
+                if (response.ok) {
+                  const text = await response.text();
+                  if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                    return text.trim();
+                  }
+                }
+              } catch (e) {
+                console.error("First height method failed:", e);
+              }
+              
+              // Method 2: Try /r/height endpoint 
+              try {
+                const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+                if (response.ok) {
+                  const text = await response.text();
+                  if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                    return text.trim();
+                  }
+                }
+              } catch (e) {
+                console.error("Second height method failed:", e);
+              }
+              
+              // Method 3: Try a block info request to extract height
+              try {
+                const response = await fetch(`${baseUrl}/r/blockinfo/tip`, { cache: 'no-store' });
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data && data.height && !isNaN(Number(data.height))) {
+                    return data.height.toString();
+                  }
+                }
+              } catch (e) {
+                console.error("Third height method failed:", e);
+              }
+              
+              return null;
+            };
+            
+            // Try to get the height
+            blockHeight = await getBlockHeight();
+            
+            if (!blockHeight) {
+              appendToConsole("Could not retrieve block height for hash lookup", "error");
+              return;
+            }
+          }
+          
+          // Now get the block info to extract the hash
+          url = `${baseUrl}/r/blockinfo/${blockHeight}`;
+          response = await fetch(url);
+          
+          if (!response.ok) {
+            appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+            return;
+          }
+          
+          data = await response.json();
+          
+          if (data && data.hash) {
+            appendToConsole(`Block hash for height ${blockHeight}: ${data.hash}`, "success");
+          } else {
+            appendToConsole("Could not retrieve block hash", "error");
+          }
+          return;
+        }
+      }
+      
+      // If no arguments, get the latest block info
+      if (args.length === 0) {
+        // Define a function to try different methods of getting block height
+        const getBlockHeight = async (): Promise<string | null> => {
+          // Method 1: Simple request with text/plain header
+          try {
+            const response = await fetch(`${baseUrl}/r/blockheight`, {
+              cache: 'no-store',
+              headers: {
+                'Accept': 'text/plain'
+              }
+            });
+            
+            if (response.ok) {
+              const text = await response.text();
+              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                return text.trim();
+              }
+            }
+          } catch (e) {
+            console.error("First height method failed:", e);
+          }
+          
+          // Method 2: Try /r/height endpoint 
+          try {
+            const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+            if (response.ok) {
+              const text = await response.text();
+              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                return text.trim();
+              }
+            }
+          } catch (e) {
+            console.error("Second height method failed:", e);
+          }
+          
+          // Method 3: Try a block info request to extract height
+          try {
+            const response = await fetch(`${baseUrl}/r/blockinfo/tip`, { cache: 'no-store' });
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.height && !isNaN(Number(data.height))) {
+                return data.height.toString();
+              }
+            }
+          } catch (e) {
+            console.error("Third height method failed:", e);
+          }
+          
+          return null;
+        };
+        
+        // Try to get the height
+        const height = await getBlockHeight();
+        
+        if (!height) {
+          appendToConsole("Could not retrieve block height", "error");
+          return;
+        }
+        
+        url = `${baseUrl}/r/blockinfo/${height}`;
+        appendToConsole(`Retrieving latest block (height: ${height})...`, "default");
+        response = await fetch(url);
+        data = await response.json();
+        appendToConsole(JSON.stringify(data, null, 2), "json");
+      } else {
+        // Handle block by hash or height
+        const blockId = args[0]; // Could be a hash or height
+        url = `${baseUrl}/r/blockinfo/${blockId}`;
+        appendToConsole(`Retrieving block ${blockId}...`, "default");
+        response = await fetch(url);
+        data = await response.json();
+        appendToConsole(JSON.stringify(data, null, 2), "json");
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleInscription = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify an inscription ID. Type HELP INSCRIPTION for options.", "error");
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // First argument is always the inscription ID
+      const inscriptionId = args[0];
+      
+      // Second argument is the optional subcommand
+      let subcommand = args.length > 1 ? args[1].toUpperCase() : "ALL";
+      
+      let url;
+      let response;
+      let data;
+      let contentUrl;
+      
+      switch (subcommand) {
+        case "ALL":
+          // Return all available information
+          appendToConsole(`Retrieving all information for inscription ${inscriptionId}:`, "system");
+          
+          // Get inscription info
+          url = `${baseUrl}/r/inscription/${inscriptionId}`;
+          try {
+            response = await fetch(url);
+            if (response.ok) {
+              data = await response.json();
+              appendToConsole("INFO:", "success");
+              appendToConsole(JSON.stringify(data, null, 2), "json");
+            }
+          } catch (error) {
+            appendToConsole(`Error fetching INFO: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+          }
+          
+          // Get content link
+          contentUrl = `${baseUrl}/content/${inscriptionId}`;
+          appendToConsole("CONTENT:", "success");
+          appendToConsole(`To view content, visit: ${contentUrl}`, "default");
+          
+          // Get metadata if available
+          try {
+            // Try using metadata endpoint
+            url = `${baseUrl}/r/metadata/${inscriptionId}`;
+            appendToConsole(`Fetching metadata from: ${url}`, "default");
+            response = await fetch(url);
+            
+            if (response.ok) {
+              // First try to get metadata as JSON
+              const text = await response.text();
+              if (!text || text.trim() === "") {
+                appendToConsole("METADATA: No metadata available for this inscription", "system");
+              } else {
+                appendToConsole("METADATA:", "success");
+                try {
+                  // Try to parse as JSON first
+                  const jsonData = JSON.parse(text);
+                  appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+                } catch (parseError) {
+                  // If not JSON, just display the raw text
+                  appendToConsole(text, "default");
+                }
+              }
+            } else {
+              appendToConsole("METADATA: No metadata available for this inscription", "system");
+            }
+          } catch (error) {
+            appendToConsole(`Error fetching METADATA: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+          }
+          break;
+          
+        case "CONTENT":
+          url = `${baseUrl}/content/${inscriptionId}`;
+          appendToConsole(`Retrieving content from: ${url}`, "default");
+          appendToConsole(`To view content, visit: ${url}`, "success");
+          break;
+          
+        case "UNDELEGATED":
+          // Assuming this is a separate endpoint for undelegated content
+          url = `${baseUrl}/content/${inscriptionId}?undelegated=true`;
+          appendToConsole(`Retrieving undelegated content from: ${url}`, "default");
+          appendToConsole(`To view undelegated content, visit: ${url}`, "success");
+          break;
+          
+        case "INFO":
+          url = `${baseUrl}/r/inscription/${inscriptionId}`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        case "METADATA":
+          // Try using the direct metadata endpoint
+          url = `${baseUrl}/r/metadata/${inscriptionId}`;
+          appendToConsole(`Fetching metadata from: ${url}`, "default");
+          response = await fetch(url);
+          
+          if (response.ok) {
+            // Get the text content of the metadata
+            const text = await response.text();
+            if (!text || text.trim() === "") {
+              appendToConsole("No metadata available for this inscription", "system");
+            } else {
+              appendToConsole("METADATA:", "success");
+              try {
+                // Try to parse as JSON first
+                const jsonData = JSON.parse(text);
+                appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+              } catch (parseError) {
+                // If not JSON, just display the raw text
+                appendToConsole(text, "default");
+              }
+            }
+          } else {
+            appendToConsole("No metadata available for this inscription", "system");
+          }
+          break;
+          
+        case "PARENTS":
+          url = `${baseUrl}/r/parents/${inscriptionId}`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        case "CHILDREN":
+          url = `${baseUrl}/r/children/${inscriptionId}`;
+          response = await fetch(url);
+          data = await response.json();
+          appendToConsole(JSON.stringify(data, null, 2), "json");
+          break;
+          
+        default:
+          appendToConsole(`Unknown INSCRIPTION subcommand: ${subcommand}. Type HELP INSCRIPTION for options.`, "error");
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleSat = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a satoshi number. Type HELP SAT for options.", "error");
+      return;
+    }
+    
+    const satNumber = args[0];
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/sat/${satNumber}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      appendToConsole(JSON.stringify(data, null, 2), "json");
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleTransaction = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a transaction ID. Type HELP TRANSACTION for options.", "error");
+      return;
+    }
+    
+    const txid = args[0];
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/tx/${txid}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      appendToConsole(JSON.stringify(data, null, 2), "json");
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  const handleUtxo = async (args: string[]) => {
+    if (args.length === 0) {
+      appendToConsole("Please specify a UTXO in the format txid:vout. Type HELP UTXO for options.", "error");
+      return;
+    }
+    
+    const utxoParam = args[0];
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/utxo/${utxoParam}`;
+      appendToConsole(`Fetching UTXO information from: ${url}`, "default");
+      
+      const response = await fetch(url);
+      
+      // Check if the response is ok before trying to parse JSON
+      if (!response.ok) {
+        appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+        if (response.status === 404) {
+          appendToConsole("UTXO not found", "error");
+        }
+        return;
+      }
+      
+      // Check the response text before parsing to avoid JSON errors
+      const text = await response.text();
+      if (!text || text.trim() === "") {
+        appendToConsole("No information found for this UTXO", "default");
+        return;
+      }
       
       try {
-        if (contentType?.includes("application/json") || text.startsWith("{") || text.startsWith("[")) {
-          const jsonData = JSON.parse(text);
-          const formattedJson = JSON.stringify(jsonData, null, 2);
-          appendToConsole(formattedJson, "json");
-        } else {
-          // For content and other binary responses, provide a link
-          appendToConsole(`Retrieved content successfully (${contentType})`, "success");
-          if (inscriptionAction === "CONTENT") {
-            appendToConsole(`View content at: ${baseUrl}/content/${inscriptionId}`, "default");
-          } else {
-            appendToConsole(text, "default");
-          }
-        }
+        const data = JSON.parse(text);
+        appendToConsole(JSON.stringify(data, null, 2), "json");
       } catch (parseError) {
         appendToConsole(`Could not parse response as JSON: ${text}`, "error");
       }
@@ -340,7 +816,7 @@ export default function Home() {
     ];
     
     // Some bitmap districts are not the first inscription on their sat - data from the OCI script
-    const satIndices: Record<number, number> = {
+    const satIndices = {
       92871: 1, 92970: 1, 123132: 1, 365518: 1, 700181: 1, 
       826151: 1, 827151: 1, 828151: 1, 828239: 1, 828661: 1,
       829151: 1, 830151: 1, 832104: 2, 832249: 2, 832252: 2,
@@ -353,12 +829,18 @@ export default function Home() {
       845151: 1
     };
     
-    // Initialize OCI data if it isn't already
-    const initializeOci = async () => {
-      if (!ociLoaded) {
+    const loadOciData = async () => {
+      if (ociLoaded) {
+        appendToConsole("OCI data is already loaded.", "success");
+        return true;
+      }
+      
+      try {
         appendToConsole("Loading Bitcoin Districts OCI data...", "system");
-        appendToConsole("Initializing the OCI structure...", "system");
+        appendToConsole("This may take a few moments to understand the structure.", "system");
         
+        // We're not actually loading the full OCI data, as it would need to fetch 9 inscriptions
+        // Instead, we're marking it as loaded and will fetch and process the specific page when needed
         setOciData({
           loaded: true,
           pageUrls: pageUrls,
@@ -367,164 +849,11 @@ export default function Home() {
         });
         setOciLoaded(true);
         
-        appendToConsole("OCI structure prepared.", "success");
-      }
-      return true;
-    };
-    
-    // Function to load a specific district data page
-    const loadDistrictPage = async (page: number): Promise<number[] | null> => {
-      try {
-        appendToConsole(`Loading data for districts ${page * 100000} - ${(page + 1) * 100000 - 1}...`, "default");
-        
-        const url = `${baseUrl}${pageUrls[page]}`;
-        const response = await fetch(url, { cache: 'no-store' });
-        
-        if (!response.ok) {
-          appendToConsole(`Error: Could not load district data for page ${page}. Server responded with ${response.status}`, "error");
-          return null;
-        }
-        
-        const responseText = await response.text();
-        let data: any;
-        
-        try {
-          // Special handling for pages 0 and 1 which have different formats
-          if (page === 0 || page === 1) {
-            try {
-              // For these problematic pages, let's create a simpler approach
-              // Filling in placeholder data for districts on these pages
-              appendToConsole(`Using simplified approach for page ${page}...`, "default");
-              
-              // Create arrays of appropriate size
-              const dummyDeltas = [0]; // Just need a starting point
-              const dummyIndices = [];
-              
-              // Fill with sequential numbers for this page
-              for (let i = 0; i < 100000; i++) {
-                dummyIndices.push(i);
-              }
-              
-              // Use a deterministic mapping for these pages based on district number
-              // This creates a predictable pattern similar to real data
-              const baseValue = page * 100000 * 1000; // Use a base value in the right range for Bitcoin sats
-              dummyDeltas[0] = baseValue;
-              
-              data = [dummyDeltas, dummyIndices];
-              appendToConsole(`Created alternative structure for page ${page}.`, "success");
-            } catch (e) {
-              appendToConsole(`Error handling page ${page}: ${e instanceof Error ? e.message : String(e)}`, "error");
-            }
-          } else if (page === 2 || page === 3) {
-            // Special handling for pages 2 and 3
-            data = JSON.parse('[' + responseText + ']');
-            data = [data.slice(0, 99999), data.slice(100000, 199999)];
-          } else {
-            // For other pages, try different parsing approaches
-            try {
-              data = JSON.parse(responseText.replaceAll('\\n  ', ''));
-            } catch (e) {
-              try {
-                data = JSON.parse(responseText.replaceAll('  ', ''));
-              } catch (e2) {
-                data = JSON.parse(responseText);
-              }
-            }
-          }
-          
-          // Check if data is in the expected format
-          if (!Array.isArray(data) || data.length !== 2) {
-            appendToConsole(`Unexpected data format. Attempting to normalize...`, "default");
-            
-            if (typeof data === 'object' && data !== null) {
-              const keys = Object.keys(data);
-              if (keys.length === 2 && Array.isArray(data[keys[0]]) && Array.isArray(data[keys[1]])) {
-                data = [data[keys[0]], data[keys[1]]];
-                appendToConsole(`Data structure normalized.`, "success");
-              }
-            }
-          }
-          
-          // Verify the data format is valid
-          if (!Array.isArray(data) || data.length !== 2 || !Array.isArray(data[0]) || !Array.isArray(data[1])) {
-            appendToConsole(`Error: Could not process data for page ${page} - invalid format`, "error");
-            return null;
-          }
-          
-          // Process the data to get sat numbers
-          const fullSats: number[] = [];
-          let resultArray;
-          
-          try {
-            // Special handling for pages 0 and 1
-            if (page === 0 || page === 1) {
-              // For these problematic pages, create representative data
-              // Fill array with values that follow a pattern similar to actual data
-              const filledArray = Array(100000).fill(0);
-              const baseValue = page === 0 ? 1000000 : 5000000;
-              for (let i = 0; i < 100000; i++) {
-                // Create a deterministic pattern based on district number
-                filledArray[i] = baseValue + (i * 3);
-              }
-              appendToConsole(`Created representative pattern for page ${page} data.`, "success");
-              console.log(`Page ${page} data processed with ${filledArray.length} entries.`);
-              resultArray = filledArray;
-            } else {
-              // For regular pages, process normally
-              data[0].forEach((sat: string | number, i: number) => {
-                if (i === 0) {
-                  fullSats.push(parseInt(String(sat)));
-                } else {
-                  fullSats.push(parseInt(String(fullSats[i-1])) + parseInt(String(sat)));
-                }
-              });
-              
-              // Organize sat numbers by district index
-              const filledArray = Array(100000).fill(0);
-              data[1].forEach((index: number, i: number) => {
-                if (i < fullSats.length) {
-                  filledArray[index] = fullSats[i];
-                }
-              });
-              
-              console.log(`Page ${page} data processed with ${filledArray.length} entries and ${fullSats.length} sats.`);
-              appendToConsole(`Successfully processed ${fullSats.length} sat entries for page ${page}.`, "success");
-              resultArray = filledArray;
-            }
-          } catch (err) {
-            console.error(`Error processing data array for page ${page}:`, err);
-            appendToConsole(`Error processing data for page ${page}. Using fallback values.`, "error");
-            
-            // If we fail with the real data, create a fallback pattern
-            const fallbackArray = Array(100000).fill(0);
-            const baseValue = 1000000 + (page * 100000);
-            for (let i = 0; i < 100000; i++) {
-              fallbackArray[i] = baseValue + (i * 2);
-            }
-            resultArray = fallbackArray;
-          }
-          
-          // Store the processed data with string keys for consistency
-          const pageKey = String(page);
-          const updatedPages = { ...ociData.loadedPages };
-          updatedPages[pageKey] = resultArray;
-          
-          // Debug log to verify data is being saved
-          console.log(`Storing page ${pageKey} with ${resultArray.length} entries`);
-          
-          setOciData({
-            ...ociData,
-            loadedPages: updatedPages
-          });
-          
-          return resultArray;
-        } catch (error) {
-          appendToConsole(`Error processing data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
-          return null;
-        }
+        appendToConsole("OCI structure prepared. District data will be loaded on demand.", "success");
+        return true;
       } catch (error) {
-        appendToConsole(`Error loading district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
-        return null;
+        appendToConsole(`Error initializing OCI data: ${error instanceof Error ? error.message : String(error)}`, "error");
+        return false;
       }
     };
     
@@ -537,55 +866,88 @@ export default function Home() {
       
       // Determine which page this bitmap is in
       const page = Math.floor(districtNumber / 100000);
-      const index = districtNumber % 100000;
       
-      try {
-        // String key for lookup
-        const pageKey = String(page);
-        
-        // For debugging
-        console.log(`Retrieving data for district #${districtNumber} on page ${pageKey}`);
-        
-        // Try to load the page if not already loaded
-        if (!ociData.loadedPages[pageKey]) {
-          console.log(`Page ${pageKey} not loaded yet, loading now...`);
-          await loadDistrictPage(page);
-        }
-        
-        // Only use real data from the loaded page - no patterns
-        // Check if we have valid data in the loaded page
-        if (ociData.loadedPages[pageKey] && 
-            Array.isArray(ociData.loadedPages[pageKey]) && 
-            ociData.loadedPages[pageKey].length > 0 &&
-            ociData.loadedPages[pageKey][index] && 
-            ociData.loadedPages[pageKey][index] > 0) {
-            
-          // Use actual loaded data
-          const value = ociData.loadedPages[pageKey][index];
-          console.log(`Using actual data for page ${page}: ${value}`);
-          console.log(`Final value for district ${districtNumber}: ${value}`);
-          return value;
-        }
-        // No valid data found - this is an error
-        else {
-          console.error(`No valid data found for district ${districtNumber} on page ${page}`);
-          appendToConsole(`Error: Could not retrieve valid sat data for district ${districtNumber}`, "error");
+      // Check if we've already loaded this page
+      if (!ociData.loadedPages[page]) {
+        try {
+          appendToConsole(`Loading data for districts ${page * 100000} - ${(page + 1) * 100000 - 1}...`, "default");
+          
+          const url = `${baseUrl}${pageUrls[page]}`;
+          const response = await fetch(url, { cache: 'no-store' });
+          
+          if (!response.ok) {
+            appendToConsole(`Error: Could not load district data. Server responded with ${response.status}`, "error");
+            return null;
+          }
+          
+          let data;
+          const responseText = await response.text();
+          
+          // Fix for inconsistent (page 2 & 3) formatting (as per the OCI script)
+          if (page === 2 || page === 3) {
+            try {
+              data = JSON.parse('[' + responseText + ']');
+              data = [data.slice(0, 99999), data.slice(100000, 199999)];
+            } catch (error) {
+              appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+              return null;
+            }
+          } else {
+            try {
+              // Try to parse JSON, handling different formatting possibilities
+              try {
+                data = JSON.parse(responseText.replaceAll('\\n  ', ''));
+              } catch (e) {
+                try {
+                  data = JSON.parse(responseText.replaceAll('  ', ''));
+                } catch (e2) {
+                  // If both formats fail, try the direct parse
+                  data = JSON.parse(responseText);
+                }
+              }
+            } catch (error) {
+              appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+              return null;
+            }
+          }
+          
+          // Rebuild full sat numbers from deltas
+          const fullSats: number[] = [];
+          data[0].forEach((sat: string | number, i: number) => {
+            if (i === 0) {
+              fullSats.push(parseInt(sat as string));
+            } else {
+              fullSats.push(parseInt(fullSats[i-1] as unknown as string) + parseInt(sat as string));
+            }
+          });
+          
+          // Put them back into correct order
+          let filledArray = Array(100000).fill(0);
+          data[1].forEach((index: number, i: number) => {
+            filledArray[index] = fullSats[i];
+          });
+          
+          // Store the loaded page
+          ociData.loadedPages[page] = filledArray;
+          appendToConsole(`District data for page ${page} loaded successfully!`, "success");
+        } catch (error) {
+          appendToConsole(`Error loading district data: ${error instanceof Error ? error.message : String(error)}`, "error");
           return null;
         }
-      } catch (error) {
-        console.error(`Error in getBitmapSat: ${error}`);
-        appendToConsole(`Error retrieving sat data for district ${districtNumber}: ${error instanceof Error ? error.message : String(error)}`, "error");
-        return null;
       }
+      
+      // Return the sat number for the district
+      return ociData.loadedPages[page][districtNumber % 100000];
     };
     
     // Function to get the sat index for a district (most are 0, but some are higher)
     const getBitmapSatIndex = (districtNumber: number): number => {
-      return satIndices[districtNumber] || 0;
+      return satIndices[districtNumber as keyof typeof satIndices] || 0;
     };
     
     // Function to get the inscription ID for a district
     const getBitmapInscriptionId = async (districtNumber: number): Promise<string | null> => {
+      // First get the sat
       const sat = await getBitmapSat(districtNumber);
       
       if (!sat) {
@@ -593,7 +955,10 @@ export default function Home() {
       }
       
       try {
+        // Get the inscription index for this district
         const satIndex = getBitmapSatIndex(districtNumber);
+        
+        // Get inscription ID from sat endpoint
         const url = `${baseUrl}/r/sat/${sat}/at/${satIndex}`;
         const response = await fetch(url);
         
@@ -610,60 +975,45 @@ export default function Home() {
       }
     };
     
-    // Initialize OCI if needed
-    await initializeOci();
-    
-    // Process the command arguments
+    // Check if a specific command was provided
     if (args.length > 0) {
       const subcommand = args[0].toUpperCase();
       
       if (subcommand === "LOAD") {
-        // Load all pages at once (0-8)
-        appendToConsole("Starting to load all Bitcoin Districts data...", "system");
-        
-        let loadedPageCount = 0;
-        for (let i = 0; i < 9; i++) {
-          const pageKey = String(i);
-          if (!ociData.loadedPages[pageKey]) {
-            const pageData = await loadDistrictPage(i);
-            if (pageData) {
-              loadedPageCount++;
-            }
-          } else {
-            appendToConsole(`District data for page ${i} already loaded.`, "default");
-            loadedPageCount++;
-          }
-        }
-        
-        appendToConsole(`Bitcoin Districts data loading complete. ${loadedPageCount} of 9 pages loaded.`, "success");
+        // Load the OCI data structure
+        await loadOciData();
       } else {
-        // Try to parse as a district number
-        const districtNumber = parseInt(subcommand, 10);
+        // Treat as a district number
+        const districtNumber = parseInt(args[0], 10);
         
         if (isNaN(districtNumber)) {
-          appendToConsole(`Invalid district number: ${subcommand}`, "error");
+          appendToConsole(`Invalid district number: ${args[0]}`, "error");
         } else if (districtNumber < 0 || districtNumber > 839999) {
           appendToConsole(`District number must be between 0 and 839999`, "error");
         } else {
-          // Look up this district's sat
-          appendToConsole(`Resolving sat number for Bitcoin District #${districtNumber}...`, "default");
+          // First make sure the OCI data structure is loaded
+          const loaded = ociLoaded || await loadOciData();
           
-          const sat = await getBitmapSat(districtNumber);
-          if (sat) {
-            const satIndex = getBitmapSatIndex(districtNumber);
-            appendToConsole(`Bitcoin District #${districtNumber} corresponds to sat ${sat}`, "success");
+          if (loaded) {
+            appendToConsole(`Resolving sat number for Bitcoin District #${districtNumber}...`, "default");
             
-            if (satIndex > 0) {
-              appendToConsole(`Note: This district's bitmap is inscription #${satIndex} on this sat`, "default");
-            }
-            
-            // Try to get the inscription ID
-            appendToConsole("Fetching inscription ID...", "default");
-            const inscriptionId = await getBitmapInscriptionId(districtNumber);
-            
-            if (inscriptionId) {
-              appendToConsole(`Inscription ID: ${inscriptionId}`, "success");
-              appendToConsole(`Explore at: ${baseUrl}/inscription/${inscriptionId}`, "default");
+            const sat = await getBitmapSat(districtNumber);
+            if (sat) {
+              const satIndex = getBitmapSatIndex(districtNumber);
+              appendToConsole(`Bitcoin District #${districtNumber} corresponds to sat ${sat}`, "success");
+              
+              if (satIndex > 0) {
+                appendToConsole(`Note: This district's bitmap is inscription #${satIndex} on this sat`, "default");
+              }
+              
+              // Try to get the inscription ID
+              appendToConsole("Fetching inscription ID...", "default");
+              const inscriptionId = await getBitmapInscriptionId(districtNumber);
+              
+              if (inscriptionId) {
+                appendToConsole(`Inscription ID: ${inscriptionId}`, "success");
+                appendToConsole(`Explore at: ${baseUrl}/inscription/${inscriptionId}`, "default");
+              }
             }
           }
         }
@@ -678,7 +1028,6 @@ export default function Home() {
         const loadedPages = Object.keys(ociData.loadedPages).length;
         appendToConsole(`${loadedPages} of 9 district pages are currently loaded.`, "default");
         appendToConsole("Pages are loaded on demand when you query a district number.", "default");
-        appendToConsole("Use OCI LOAD to load all district data at once.", "default");
       } else {
         appendToConsole("OCI Status: Bitcoin Districts mapping not initialized.", "default");
         appendToConsole("Use OCI LOAD to prepare the system, or OCI <district_number> to look up directly.", "default");
@@ -688,193 +1037,7 @@ export default function Home() {
     setIsProcessing(false);
   };
   
-  // Handler for SAT command
-  const handleSat = async (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length < 1) {
-      appendToConsole("Missing sat number. Usage: SAT <number>", "error");
-      setIsProcessing(false);
-      return;
-    }
-    
-    try {
-      const satNumber = parseInt(args[0], 10);
-      
-      if (isNaN(satNumber)) {
-        appendToConsole(`Invalid sat number: ${args[0]}`, "error");
-        setIsProcessing(false);
-        return;
-      }
-      
-      appendToConsole(`Fetching information for sat ${satNumber}...`, "default");
-      
-      const url = `${baseUrl}/r/sat/${satNumber}`;
-      const response = await fetch(url, { cache: 'no-store' });
-      
-      if (!response.ok) {
-        appendToConsole(`Error: Could not retrieve sat data. Server responded with ${response.status}`, "error");
-        setIsProcessing(false);
-        return;
-      }
-      
-      const data = await response.json();
-      const formattedData = JSON.stringify(data, null, 2);
-      appendToConsole(formattedData, "json");
-      
-    } catch (error) {
-      if (error instanceof Error) {
-        appendToConsole(`Error: ${error.message}`, "error");
-      } else {
-        appendToConsole("An unknown error occurred", "error");
-      }
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  // Handler for BLOCK command
-  const handleBlock = async (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length === 0) {
-      try {
-        // Get the latest block information
-        const url = `${baseUrl}/r/block`;
-        const response = await fetch(url, { cache: 'no-store' });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const formattedData = JSON.stringify(data, null, 2);
-          appendToConsole(formattedData, "json");
-        } else {
-          appendToConsole(`Error: Could not get latest block info. Server responded with ${response.status}`, "error");
-        }
-      } catch (error) {
-        if (error instanceof Error) {
-          appendToConsole(`Error: ${error.message}`, "error");
-        } else {
-          appendToConsole("An unknown error occurred", "error");
-        }
-      } finally {
-        setIsProcessing(false);
-      }
-      
-      return;
-    }
-    
-    const subcommand = args[0].toUpperCase();
-    
-    try {
-      // Handle subcommands
-      if (subcommand === "HEIGHT") {
-        // Get latest block height
-        const url = `${baseUrl}/r/blockheight`;
-        const response = await fetch(url, { cache: 'no-store' });
-        
-        if (response.ok) {
-          const data = await response.json();
-          appendToConsole(`Current block height: ${data.height}`, "success");
-        } else {
-          appendToConsole(`Error: Could not get block height. Server responded with ${response.status}`, "error");
-        }
-      } else if (subcommand === "HASH") {
-        if (args.length > 1) {
-          // Get hash for specific height
-          const height = parseInt(args[1], 10);
-          
-          if (isNaN(height)) {
-            appendToConsole(`Invalid block height: ${args[1]}`, "error");
-          } else {
-            const url = `${baseUrl}/r/blockhash/${height}`;
-            const response = await fetch(url, { cache: 'no-store' });
-            
-            if (response.ok) {
-              const data = await response.json();
-              appendToConsole(`Block hash for height ${height}: ${data.blockhash}`, "success");
-            } else {
-              appendToConsole(`Error: Could not get block hash. Server responded with ${response.status}`, "error");
-            }
-          }
-        } else {
-          // Get latest block hash
-          const url = `${baseUrl}/r/blockheight`;
-          const heightResponse = await fetch(url, { cache: 'no-store' });
-          
-          if (heightResponse.ok) {
-            const heightData = await heightResponse.json();
-            const height = heightData.height;
-            
-            const hashUrl = `${baseUrl}/r/blockhash/${height}`;
-            const hashResponse = await fetch(hashUrl, { cache: 'no-store' });
-            
-            if (hashResponse.ok) {
-              const hashData = await hashResponse.json();
-              appendToConsole(`Latest block hash (height ${height}): ${hashData.blockhash}`, "success");
-            } else {
-              appendToConsole(`Error: Could not get block hash. Server responded with ${hashResponse.status}`, "error");
-            }
-          } else {
-            appendToConsole(`Error: Could not get block height. Server responded with ${heightResponse.status}`, "error");
-          }
-        }
-      } else if (subcommand === "TIME") {
-        // Handle BLOCK TIME command
-        // Get latest block time
-        const url = `${baseUrl}/r/blockheight`;
-        const heightResponse = await fetch(url, { cache: 'no-store' });
-        
-        if (heightResponse.ok) {
-          const heightData = await heightResponse.json();
-          const height = heightData.height;
-          
-          const blockUrl = `${baseUrl}/r/block/${height}`;
-          const blockResponse = await fetch(blockUrl, { cache: 'no-store' });
-          
-          if (blockResponse.ok) {
-            const blockData = await blockResponse.json();
-            const unixTime = blockData.time;
-            
-            const option = args.length > 1 ? args[1].toUpperCase() : "";
-            
-            if (option === "UNIX") {
-              appendToConsole(`Block time (Unix): ${unixTime}`, "success");
-            } else if (option === "LOCAL" || option === "CURRENT") {
-              const localTime = new Date(unixTime * 1000).toLocaleString();
-              appendToConsole(`Block time (Local): ${localTime}`, "success");
-            } else {
-              const localTime = new Date(unixTime * 1000).toLocaleString();
-              appendToConsole(`Block time: ${unixTime} (${localTime})`, "success");
-            }
-          } else {
-            appendToConsole(`Error: Could not get block data. Server responded with ${blockResponse.status}`, "error");
-          }
-        } else {
-          appendToConsole(`Error: Could not get block height. Server responded with ${heightResponse.status}`, "error");
-        }
-      } else {
-        // Treat as block height or hash
-        const url = `${baseUrl}/r/block/${args[0]}`;
-        const response = await fetch(url, { cache: 'no-store' });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const formattedData = JSON.stringify(data, null, 2);
-          appendToConsole(formattedData, "json");
-        } else {
-          appendToConsole(`Error: Could not get block info. Server responded with ${response.status}`, "error");
-        }
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        appendToConsole(`Error: ${error.message}`, "error");
-      } else {
-        appendToConsole("An unknown error occurred", "error");
-      }
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+
   
   const handleTime = (args: string[]) => {
     setIsProcessing(true);
@@ -898,84 +1061,6 @@ export default function Home() {
         // Default: show both formats
         appendToConsole(`Current system time: ${unixTime} (${localTime})`, "success");
       }
-    } catch (error) {
-      if (error instanceof Error) {
-        appendToConsole(`Error: ${error.message}`, "error");
-      } else {
-        appendToConsole("An unknown error occurred", "error");
-      }
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  // Handler for UTXO command
-  const handleUtxo = async (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length < 1) {
-      appendToConsole("Missing UTXO identifier. Usage: UTXO <txid:vout>", "error");
-      setIsProcessing(false);
-      return;
-    }
-    
-    try {
-      const utxoId = args[0];
-      const url = `${baseUrl}/r/output/${utxoId}`;
-      
-      appendToConsole(`Fetching UTXO information for ${utxoId}...`, "default");
-      
-      const response = await fetch(url, { cache: 'no-store' });
-      
-      if (!response.ok) {
-        appendToConsole(`Error: Could not retrieve UTXO data. Server responded with ${response.status}`, "error");
-        setIsProcessing(false);
-        return;
-      }
-      
-      const data = await response.json();
-      const formattedData = JSON.stringify(data, null, 2);
-      appendToConsole(formattedData, "json");
-      
-    } catch (error) {
-      if (error instanceof Error) {
-        appendToConsole(`Error: ${error.message}`, "error");
-      } else {
-        appendToConsole("An unknown error occurred", "error");
-      }
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  // Handler for TRANSACTION command
-  const handleTransaction = async (args: string[]) => {
-    setIsProcessing(true);
-    
-    if (args.length < 1) {
-      appendToConsole("Missing transaction ID. Usage: TRANSACTION <txid>", "error");
-      setIsProcessing(false);
-      return;
-    }
-    
-    try {
-      const txid = args[0];
-      const url = `${baseUrl}/r/tx/${txid}`;
-      
-      appendToConsole(`Fetching transaction information for ${txid}...`, "default");
-      
-      const response = await fetch(url, { cache: 'no-store' });
-      
-      if (!response.ok) {
-        appendToConsole(`Error: Could not retrieve transaction data. Server responded with ${response.status}`, "error");
-        setIsProcessing(false);
-        return;
-      }
-      
-      const data = await response.json();
-      const formattedData = JSON.stringify(data, null, 2);
-      appendToConsole(formattedData, "json");
-      
     } catch (error) {
       if (error instanceof Error) {
         appendToConsole(`Error: ${error.message}`, "error");
