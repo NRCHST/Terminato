@@ -802,6 +802,33 @@ export default function Home() {
   const handleOci = async (args: string[]) => {
     setIsProcessing(true);
     
+    // Define the URLs for the page content - these hardcoded values are from the OCI inscription
+    const pageUrls = [
+      '/content/01bba6c58af39d7f199aa2bceeaaba1ba91b23d2663bc4ef079a4b5e442dbf74i0',
+      '/content/bb01dfa977a5cd0ee6e900f1d1f896b5ec4b1e3c7b18f09c952f25af6591809fi0',
+      '/content/bb02e94f3062facf6aa2e47eeed348d017fd31c97614170dddb58fc59da304efi0',
+      '/content/bb037ec98e6700e8415f95d1f5ca1fe1ba23a3f0c5cb7284d877e9ac418d0d32i0',
+      '/content/bb9438f4345f223c6f4f92adf6db12a82c45d1724019ecd7b6af4fcc3f5786cei0',
+      '/content/bb0542d4606a9e7eb4f31051e91f7696040db06ca1383dff98505618c34d7df7i0',
+      '/content/bb06a4dffba42b6b513ddee452b40a67688562be4a1345127e4d57269e6b2ab6i0',
+      '/content/bb076934c1c22007b315dd1dc0f8c4a2f9d52f348320cfbadc7c0bd99eaa5e18i0',
+      '/content/bb986a1208380ec7db8df55a01c88c73a581069a51b5a2eb2734b41ba10b65c2i0'
+    ];
+    
+    // Some bitmap districts are not the first inscription on their sat - data from the OCI script
+    const satIndices = {
+      92871: 1, 92970: 1, 123132: 1, 365518: 1, 700181: 1, 
+      826151: 1, 827151: 1, 828151: 1, 828239: 1, 828661: 1,
+      829151: 1, 830151: 1, 832104: 2, 832249: 2, 832252: 2,
+      832385: 4, 833067: 1, 833101: 3, 833105: 4, 833109: 4,
+      833121: 8, 834030: 2, 834036: 2, 834051: 17, 834073: 4,
+      836151: 1, 837115: 2, 837120: 2, 837151: 1, 837183: 3,
+      837188: 2, 838058: 5, 838068: 2, 838076: 2, 838096: 1,
+      838151: 1, 838821: 1, 839151: 1, 839377: 1, 839378: 2,
+      839382: 2, 839397: 1, 840151: 1, 841151: 1, 842151: 1,
+      845151: 1
+    };
+    
     const loadOciData = async () => {
       if (ociLoaded) {
         appendToConsole("OCI data is already loaded.", "success");
@@ -810,35 +837,141 @@ export default function Home() {
       
       try {
         appendToConsole("Loading Bitcoin Districts OCI data...", "system");
-        appendToConsole("This may take a few moments to load the inscription.", "system");
+        appendToConsole("This may take a few moments to understand the structure.", "system");
         
-        // Fetch the OCI inscription content which contains the bitmap lookup module
-        const inscriptionId = "840bc0df4ffc5a7ccedbee35e97506c9577160e233982e627d0045d06366e362i0";
-        const url = `${baseUrl}/content/${inscriptionId}`;
+        // We're not actually loading the full OCI data, as it would need to fetch 9 inscriptions
+        // Instead, we're marking it as loaded and will fetch and process the specific page when needed
+        setOciData({
+          loaded: true,
+          pageUrls: pageUrls,
+          satIndices: satIndices,
+          loadedPages: {}
+        });
+        setOciLoaded(true);
         
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) {
-          appendToConsole(`Error: Could not load OCI data. Server responded with ${response.status}`, "error");
-          return false;
-        }
-        
-        const ociScriptText = await response.text();
-        
-        // Parse the OCI module which contains the Bitcoin Districts mapping data
-        try {
-          // We'll store the OCI module text for reference but not execute it directly
-          // Instead, we'll implement our own parser for the Bitmap lookup based on its structure
-          setOciData(ociScriptText);
-          setOciLoaded(true);
-          appendToConsole("OCI data successfully loaded!", "success");
-          return true;
-        } catch (error) {
-          appendToConsole(`Error parsing OCI data: ${error}`, "error");
-          return false;
-        }
+        appendToConsole("OCI structure prepared. District data will be loaded on demand.", "success");
+        return true;
       } catch (error) {
-        appendToConsole(`Error loading OCI data: ${error}`, "error");
+        appendToConsole(`Error initializing OCI data: ${error instanceof Error ? error.message : String(error)}`, "error");
         return false;
+      }
+    };
+    
+    // Function to get the sat number for a specific district
+    const getBitmapSat = async (districtNumber: number): Promise<number | null> => {
+      if (districtNumber < 0 || districtNumber > 839999) {
+        appendToConsole(`District number must be between 0 and 839999`, "error");
+        return null;
+      }
+      
+      // Determine which page this bitmap is in
+      const page = Math.floor(districtNumber / 100000);
+      
+      // Check if we've already loaded this page
+      if (!ociData.loadedPages[page]) {
+        try {
+          appendToConsole(`Loading data for districts ${page * 100000} - ${(page + 1) * 100000 - 1}...`, "default");
+          
+          const url = `${baseUrl}${pageUrls[page]}`;
+          const response = await fetch(url, { cache: 'no-store' });
+          
+          if (!response.ok) {
+            appendToConsole(`Error: Could not load district data. Server responded with ${response.status}`, "error");
+            return null;
+          }
+          
+          let data;
+          const responseText = await response.text();
+          
+          // Fix for inconsistent (page 2 & 3) formatting (as per the OCI script)
+          if (page === 2 || page === 3) {
+            try {
+              data = JSON.parse('[' + responseText + ']');
+              data = [data.slice(0, 99999), data.slice(100000, 199999)];
+            } catch (error) {
+              appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+              return null;
+            }
+          } else {
+            try {
+              // Try to parse JSON, handling different formatting possibilities
+              try {
+                data = JSON.parse(responseText.replaceAll('\\n  ', ''));
+              } catch (e) {
+                try {
+                  data = JSON.parse(responseText.replaceAll('  ', ''));
+                } catch (e2) {
+                  // If both formats fail, try the direct parse
+                  data = JSON.parse(responseText);
+                }
+              }
+            } catch (error) {
+              appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+              return null;
+            }
+          }
+          
+          // Rebuild full sat numbers from deltas
+          const fullSats: number[] = [];
+          data[0].forEach((sat: string | number, i: number) => {
+            if (i === 0) {
+              fullSats.push(parseInt(sat as string));
+            } else {
+              fullSats.push(parseInt(fullSats[i-1] as unknown as string) + parseInt(sat as string));
+            }
+          });
+          
+          // Put them back into correct order
+          let filledArray = Array(100000).fill(0);
+          data[1].forEach((index: number, i: number) => {
+            filledArray[index] = fullSats[i];
+          });
+          
+          // Store the loaded page
+          ociData.loadedPages[page] = filledArray;
+          appendToConsole(`District data for page ${page} loaded successfully!`, "success");
+        } catch (error) {
+          appendToConsole(`Error loading district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+          return null;
+        }
+      }
+      
+      // Return the sat number for the district
+      return ociData.loadedPages[page][districtNumber % 100000];
+    };
+    
+    // Function to get the sat index for a district (most are 0, but some are higher)
+    const getBitmapSatIndex = (districtNumber: number): number => {
+      return satIndices[districtNumber as keyof typeof satIndices] || 0;
+    };
+    
+    // Function to get the inscription ID for a district
+    const getBitmapInscriptionId = async (districtNumber: number): Promise<string | null> => {
+      // First get the sat
+      const sat = await getBitmapSat(districtNumber);
+      
+      if (!sat) {
+        return null;
+      }
+      
+      try {
+        // Get the inscription index for this district
+        const satIndex = getBitmapSatIndex(districtNumber);
+        
+        // Get inscription ID from sat endpoint
+        const url = `${baseUrl}/r/sat/${sat}/at/${satIndex}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          appendToConsole(`Error: Could not get inscription ID. Server responded with ${response.status}`, "error");
+          return null;
+        }
+        
+        const data = await response.json();
+        return data.id;
+      } catch (error) {
+        appendToConsole(`Error getting inscription ID: ${error instanceof Error ? error.message : String(error)}`, "error");
+        return null;
       }
     };
     
@@ -847,7 +980,7 @@ export default function Home() {
       const subcommand = args[0].toUpperCase();
       
       if (subcommand === "LOAD") {
-        // Load the OCI data
+        // Load the OCI data structure
         await loadOciData();
       } else {
         // Treat as a district number
@@ -858,24 +991,46 @@ export default function Home() {
         } else if (districtNumber < 0 || districtNumber > 839999) {
           appendToConsole(`District number must be between 0 and 839999`, "error");
         } else {
-          // First make sure the OCI data is loaded
+          // First make sure the OCI data structure is loaded
           const loaded = ociLoaded || await loadOciData();
           
           if (loaded) {
-            // For now, we'll display a placeholder message since we need to implement the actual parsing
             appendToConsole(`Resolving sat number for Bitcoin District #${districtNumber}...`, "default");
-            appendToConsole(`The OCI inscription is loaded, but processing is coming soon!`, "system");
+            
+            const sat = await getBitmapSat(districtNumber);
+            if (sat) {
+              const satIndex = getBitmapSatIndex(districtNumber);
+              appendToConsole(`Bitcoin District #${districtNumber} corresponds to sat ${sat}`, "success");
+              
+              if (satIndex > 0) {
+                appendToConsole(`Note: This district's bitmap is inscription #${satIndex} on this sat`, "default");
+              }
+              
+              // Try to get the inscription ID
+              appendToConsole("Fetching inscription ID...", "default");
+              const inscriptionId = await getBitmapInscriptionId(districtNumber);
+              
+              if (inscriptionId) {
+                appendToConsole(`Inscription ID: ${inscriptionId}`, "success");
+                appendToConsole(`Explore at: ${baseUrl}/inscription/${inscriptionId}`, "default");
+              }
+            }
           }
         }
       }
     } else {
       // No arguments provided, show OCI status
       if (ociLoaded) {
-        appendToConsole("OCI Status: Bitcoin Districts data is loaded.", "success");
+        appendToConsole("OCI Status: Bitcoin Districts mapping ready.", "success");
         appendToConsole("Use OCI <district_number> to lookup the sat number for a specific district.", "default");
+        
+        // Show how many district pages are loaded
+        const loadedPages = Object.keys(ociData.loadedPages).length;
+        appendToConsole(`${loadedPages} of 9 district pages are currently loaded.`, "default");
+        appendToConsole("Pages are loaded on demand when you query a district number.", "default");
       } else {
-        appendToConsole("OCI Status: Bitcoin Districts data is not loaded.", "default");
-        appendToConsole("Use OCI LOAD to load the data, or OCI <district_number> to load and lookup.", "default");
+        appendToConsole("OCI Status: Bitcoin Districts mapping not initialized.", "default");
+        appendToConsole("Use OCI LOAD to prepare the system, or OCI <district_number> to look up directly.", "default");
       }
     }
     
