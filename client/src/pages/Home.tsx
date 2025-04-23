@@ -47,49 +47,70 @@ export default function Home() {
   
   // Function to detect mode (ORD or WEB)
   const detectMode = async () => {
-    appendToConsole("Testing ORD mode connectivity...", "default");
+    appendToConsole("Testing connectivity modes...", "default");
     
+    // Try ORD mode first (local server)
+    let ordModeWorks = false;
     try {
-      // First try ORD mode (local server)
-      const ordUrl = "/r/blocktime";
-      const ordResponse = await fetch(ordUrl, { signal: AbortSignal.timeout(3000) });
+      const ordResponse = await fetch("/r/blocktime", { 
+        signal: AbortSignal.timeout(3000),
+        // Add cache: 'no-store' to prevent caching issues
+        cache: 'no-store' 
+      });
       
+      // Check not just if response is ok, but also that we can get actual data
       if (ordResponse.ok) {
-        appendToConsole("Local ORD server detected! Using ORD mode.", "success");
-        setCurrentMode("ORD");
-        setBaseUrl("");
-        setIsProcessing(false);
-        appendToConsole("Welcome to Termina (ORD mode). Type HELP to see your options.", "system");
-        return;
+        const data = await ordResponse.text();
+        if (data && data.trim() !== "") {
+          ordModeWorks = true;
+          appendToConsole("Local ORD server detected!", "success");
+        }
       }
     } catch (error) {
-      appendToConsole("No local ORD server detected, trying WEB mode...", "default");
+      appendToConsole("No local ORD server detected.", "default");
     }
     
+    // Try WEB mode
+    let webModeWorks = false;
     try {
-      // Try WEB mode (ordinals.com)
-      const webUrl = "https://ordinals.com/r/blocktime";
-      const webResponse = await fetch(webUrl, { signal: AbortSignal.timeout(5000) });
+      const webResponse = await fetch("https://ordinals.com/r/blocktime", { 
+        signal: AbortSignal.timeout(5000),
+        cache: 'no-store' 
+      });
       
       if (webResponse.ok) {
-        appendToConsole("Web connectivity detected! Using WEB mode.", "success");
-        setCurrentMode("WEB");
-        setBaseUrl("https://ordinals.com");
-        setIsProcessing(false);
-        appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
-        return;
+        const data = await webResponse.text();
+        if (data && data.trim() !== "") {
+          webModeWorks = true;
+          appendToConsole("Web connectivity detected!", "success");
+        }
       }
     } catch (error) {
       appendToConsole("Web connectivity failed.", "error");
     }
     
-    // If we reach here, both modes failed
-    appendToConsole("Could not connect to either local ORD server or ordinals.com", "error");
-    appendToConsole("Defaulting to WEB mode. You may need to change modes manually.", "system");
-    setCurrentMode("WEB");
-    setBaseUrl("https://ordinals.com");
+    // Set the mode based on which connection worked
+    if (ordModeWorks) {
+      setCurrentMode("ORD");
+      setBaseUrl("");
+      appendToConsole("Using ORD mode.", "success");
+      appendToConsole("Welcome to Termina (ORD mode). Type HELP to see your options.", "system");
+    } else if (webModeWorks) {
+      setCurrentMode("WEB");
+      setBaseUrl("https://ordinals.com");
+      appendToConsole("Using WEB mode.", "success");
+      appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
+    } else {
+      // If both modes failed
+      appendToConsole("Could not connect to either local ORD server or ordinals.com", "error");
+      appendToConsole("Defaulting to WEB mode. You may need to change modes manually.", "system");
+      setCurrentMode("WEB");
+      setBaseUrl("https://ordinals.com");
+      appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
+    }
+    
+    // Enable user input
     setIsProcessing(false);
-    appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
   };
   
   // Append text to the console
@@ -171,6 +192,7 @@ export default function Home() {
       // Ordinals section with different color
       appendToConsole("Ordinals Recursive Endpoints:", "success");
       appendToConsole("BLOCK - Retrieve block information", "default");
+      appendToConsole("BLOCKTIME - Get current block time", "default");
       appendToConsole("INSCRIPTION - Query inscription data", "default");
       appendToConsole("SAT - Get information about specific satoshis", "default");
       appendToConsole("TRANSACTION - Query transaction data", "default");
@@ -499,6 +521,33 @@ export default function Home() {
     }
   };
   
+  const handleBlockTime = async () => {
+    setIsProcessing(true);
+    
+    try {
+      const url = `${baseUrl}/r/blocktime`;
+      appendToConsole(`Fetching current block time from: ${url}`, "default");
+      
+      const response = await fetch(url, { cache: 'no-store' });
+      
+      if (!response.ok) {
+        appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+        return;
+      }
+      
+      const blockTime = await response.text();
+      appendToConsole(`Current block time: ${blockTime}`, "success");
+    } catch (error) {
+      if (error instanceof Error) {
+        appendToConsole(`Error: ${error.message}`, "error");
+      } else {
+        appendToConsole("An unknown error occurred", "error");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
   const handleClear = () => {
     setConsoleEntries([]);
     appendToConsole("Console cleared.", "system");
@@ -526,6 +575,12 @@ MODE ORD : switches to ORD mode, without prefix (requires local ord server)`,
 `BLOCK : get latest block info
 BLOCK <hash/height> : get block info at specified HASH or HEIGHT`,
       handler: handleBlock
+    },
+    BLOCKTIME: {
+      description: "Get current block time.",
+      usage: "BLOCKTIME",
+      details: "Shows the current block time using the /r/blocktime recursive endpoint.",
+      handler: handleBlockTime
     },
     INSCRIPTION: {
       description: "Query inscription data.",
