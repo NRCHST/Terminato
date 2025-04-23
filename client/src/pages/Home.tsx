@@ -15,15 +15,15 @@ interface Command {
 }
 
 export default function Home() {
-  const [currentMode, setCurrentMode] = useState<"WEB" | "ORD">("WEB");
-  const [baseUrl, setBaseUrl] = useState("https://ordinals.com");
+  const [currentMode, setCurrentMode] = useState<"WEB" | "ORD">("ORD");
+  const [baseUrl, setBaseUrl] = useState("");
   const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([
-    { text: "Welcome to Termina (test build)! Type HELP to see your options.", type: "system" }
+    { text: "Initializing Termina... checking available connectivity mode...", type: "system" }
   ]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [inputValue, setInputValue] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(true);
   
   const consoleRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,12 +35,62 @@ export default function Home() {
     }
   }, [consoleEntries]);
   
-  // Focus the input when the component mounts
+  // Focus the input when the component mounts and auto-detect mode
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
+    
+    // Auto-detect mode on startup
+    detectMode();
   }, []);
+  
+  // Function to detect mode (ORD or WEB)
+  const detectMode = async () => {
+    appendToConsole("Testing ORD mode connectivity...", "default");
+    
+    try {
+      // First try ORD mode (local server)
+      const ordUrl = "/r/blocktime";
+      const ordResponse = await fetch(ordUrl, { signal: AbortSignal.timeout(3000) });
+      
+      if (ordResponse.ok) {
+        appendToConsole("Local ORD server detected! Using ORD mode.", "success");
+        setCurrentMode("ORD");
+        setBaseUrl("");
+        setIsProcessing(false);
+        appendToConsole("Welcome to Termina (ORD mode). Type HELP to see your options.", "system");
+        return;
+      }
+    } catch (error) {
+      appendToConsole("No local ORD server detected, trying WEB mode...", "default");
+    }
+    
+    try {
+      // Try WEB mode (ordinals.com)
+      const webUrl = "https://ordinals.com/r/blocktime";
+      const webResponse = await fetch(webUrl, { signal: AbortSignal.timeout(5000) });
+      
+      if (webResponse.ok) {
+        appendToConsole("Web connectivity detected! Using WEB mode.", "success");
+        setCurrentMode("WEB");
+        setBaseUrl("https://ordinals.com");
+        setIsProcessing(false);
+        appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
+        return;
+      }
+    } catch (error) {
+      appendToConsole("Web connectivity failed.", "error");
+    }
+    
+    // If we reach here, both modes failed
+    appendToConsole("Could not connect to either local ORD server or ordinals.com", "error");
+    appendToConsole("Defaulting to WEB mode. You may need to change modes manually.", "system");
+    setCurrentMode("WEB");
+    setBaseUrl("https://ordinals.com");
+    setIsProcessing(false);
+    appendToConsole("Welcome to Termina (WEB mode). Type HELP to see your options.", "system");
+  };
   
   // Append text to the console
   const appendToConsole = (text: string, type: ConsoleEntryType = "default") => {
