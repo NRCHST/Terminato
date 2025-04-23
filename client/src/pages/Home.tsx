@@ -121,26 +121,49 @@ export default function Home() {
       setBaseUrl("https://ordinals.com");
     }
     
-    // Now get the block height for the welcome message
+    // Now get the block height directly using a dedicated call
     try {
-      const heightUrl = `${baseUrl}/r/blockheight`;
-      const heightResponse = await fetch(heightUrl, { cache: 'no-store' });
-      if (heightResponse.ok) {
-        const responseText = await heightResponse.text();
-        
-        // Make sure we have a clean response (just the number, not HTML)
-        if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
-          blockHeight = responseText.trim();
-        } else {
-          // Look for a 6-digit or longer number that would be a block height
-          // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
-          const blockHeightMatch = responseText.match(/\d{6,}/);
-          if (blockHeightMatch) {
-            blockHeight = blockHeightMatch[0];
-          } else {
-            // If we can't find a long number, don't include block height
-            console.error("Invalid block height response:", responseText);
+      // First attempt: get clean block height without HTML
+      const fetchDirectHeight = async () => {
+        const heightUrl = `${baseUrl}/r/blockheight`;
+        try {
+          // Fetch with text/plain accept header to try to get clean response
+          const response = await fetch(heightUrl, {
+            cache: 'no-store',
+            headers: {
+              'Accept': 'text/plain'
+            }
+          });
+          
+          if (!response.ok) return null;
+          
+          const text = await response.text();
+          // If it's a clean numeric response, use it
+          if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+            return text.trim();
           }
+          return null;
+        } catch (e) {
+          return null;
+        }
+      };
+      
+      // Try direct method first
+      const directHeight = await fetchDirectHeight();
+      if (directHeight) {
+        blockHeight = directHeight;
+      } else {
+        // If direct doesn't work, use BLOCK HEIGHT command method
+        try {
+          const heightResponse = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+          if (heightResponse.ok) {
+            const text = await heightResponse.text();
+            if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+              blockHeight = text.trim();
+            }
+          }
+        } catch (e) {
+          console.error("Second height attempt failed:", e);
         }
       }
     } catch (error) {
@@ -349,34 +372,66 @@ export default function Home() {
         
         if (command === "HEIGHT") {
           // Get latest block height
-          url = `${baseUrl}/r/blockheight`;
           appendToConsole("Fetching latest block height...", "default");
-          response = await fetch(url, { cache: 'no-store' });
           
-          if (!response.ok) {
-            appendToConsole(`Error: Server responded with status ${response.status}`, "error");
-            return;
-          }
-          
-          const responseText = await response.text();
-          let height = "";
-          
-          // Make sure we have a clean response (just the number, not HTML)
-          if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
-            height = responseText.trim();
-          } else {
-            // Look for a 6-digit or longer number that would be a block height
-            // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
-            const blockHeightMatch = responseText.match(/\d{6,}/);
-            if (blockHeightMatch) {
-              height = blockHeightMatch[0];
-            } else {
-              appendToConsole("Could not parse block height from response", "error");
-              return;
+          // Define a function to try different methods of getting block height
+          const getBlockHeight = async (): Promise<string | null> => {
+            // Method 1: Simple request with text/plain header
+            try {
+              const response = await fetch(`${baseUrl}/r/blockheight`, {
+                cache: 'no-store',
+                headers: {
+                  'Accept': 'text/plain'
+                }
+              });
+              
+              if (response.ok) {
+                const text = await response.text();
+                if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                  return text.trim();
+                }
+              }
+            } catch (e) {
+              console.error("First height method failed:", e);
             }
-          }
+            
+            // Method 2: Try /r/height endpoint 
+            try {
+              const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+              if (response.ok) {
+                const text = await response.text();
+                if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                  return text.trim();
+                }
+              }
+            } catch (e) {
+              console.error("Second height method failed:", e);
+            }
+            
+            // Method 3: Try a block info request to extract height
+            try {
+              const response = await fetch(`${baseUrl}/r/blockinfo/tip`, { cache: 'no-store' });
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.height && !isNaN(Number(data.height))) {
+                  return data.height.toString();
+                }
+              }
+            } catch (e) {
+              console.error("Third height method failed:", e);
+            }
+            
+            return null;
+          };
           
-          appendToConsole(`Current block height: ${height}`, "success");
+          // Try to get the height
+          const height = await getBlockHeight();
+          
+          if (height) {
+            appendToConsole(`Current block height: ${height}`, "success");
+          } else {
+            appendToConsole("Could not retrieve block height", "error");
+          }
           return;
         }
         
@@ -391,28 +446,63 @@ export default function Home() {
           } else {
             // Get hash for latest block
             appendToConsole("Fetching latest block hash...", "default");
-            const heightResponse = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
             
-            if (!heightResponse.ok) {
-              appendToConsole(`Error: Server responded with status ${heightResponse.status}`, "error");
-              return;
-            }
-            
-            const responseText = await heightResponse.text();
-            
-            // Make sure we have a clean response (just the number, not HTML)
-            if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
-              blockHeight = responseText.trim();
-            } else {
-              // Look for a 6-digit or longer number that would be a block height
-              // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
-              const blockHeightMatch = responseText.match(/\d{6,}/);
-              if (blockHeightMatch) {
-                blockHeight = blockHeightMatch[0];
-              } else {
-                appendToConsole("Could not parse block height from response", "error");
-                return;
+            // Define a function to try different methods of getting block height
+            const getBlockHeight = async (): Promise<string | null> => {
+              // Method 1: Simple request with text/plain header
+              try {
+                const response = await fetch(`${baseUrl}/r/blockheight`, {
+                  cache: 'no-store',
+                  headers: {
+                    'Accept': 'text/plain'
+                  }
+                });
+                
+                if (response.ok) {
+                  const text = await response.text();
+                  if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                    return text.trim();
+                  }
+                }
+              } catch (e) {
+                console.error("First height method failed:", e);
               }
+              
+              // Method 2: Try /r/height endpoint 
+              try {
+                const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+                if (response.ok) {
+                  const text = await response.text();
+                  if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                    return text.trim();
+                  }
+                }
+              } catch (e) {
+                console.error("Second height method failed:", e);
+              }
+              
+              // Method 3: Try a block info request to extract height
+              try {
+                const response = await fetch(`${baseUrl}/r/blockinfo/tip`, { cache: 'no-store' });
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data && data.height && !isNaN(Number(data.height))) {
+                    return data.height.toString();
+                  }
+                }
+              } catch (e) {
+                console.error("Third height method failed:", e);
+              }
+              
+              return null;
+            };
+            
+            // Try to get the height
+            blockHeight = await getBlockHeight();
+            
+            if (!blockHeight) {
+              appendToConsole("Could not retrieve block height for hash lookup", "error");
+              return;
             }
           }
           
@@ -438,30 +528,62 @@ export default function Home() {
       
       // If no arguments, get the latest block info
       if (args.length === 0) {
-        // Get the latest block info
-        response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
-        
-        if (!response.ok) {
-          appendToConsole(`Error: Server responded with status ${response.status}`, "error");
-          return;
-        }
-        
-        const responseText = await response.text();
-        let height = "";
-        
-        // Make sure we have a clean response (just the number, not HTML)
-        if (responseText && !isNaN(Number(responseText)) && responseText.length < 20) {
-          height = responseText.trim();
-        } else {
-          // Look for a 6-digit or longer number that would be a block height
-          // Bitcoin block height is currently over 800,000, so find numbers with 6+ digits
-          const blockHeightMatch = responseText.match(/\d{6,}/);
-          if (blockHeightMatch) {
-            height = blockHeightMatch[0];
-          } else {
-            appendToConsole("Could not parse block height from response", "error");
-            return;
+        // Define a function to try different methods of getting block height
+        const getBlockHeight = async (): Promise<string | null> => {
+          // Method 1: Simple request with text/plain header
+          try {
+            const response = await fetch(`${baseUrl}/r/blockheight`, {
+              cache: 'no-store',
+              headers: {
+                'Accept': 'text/plain'
+              }
+            });
+            
+            if (response.ok) {
+              const text = await response.text();
+              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                return text.trim();
+              }
+            }
+          } catch (e) {
+            console.error("First height method failed:", e);
           }
+          
+          // Method 2: Try /r/height endpoint 
+          try {
+            const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+            if (response.ok) {
+              const text = await response.text();
+              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                return text.trim();
+              }
+            }
+          } catch (e) {
+            console.error("Second height method failed:", e);
+          }
+          
+          // Method 3: Try a block info request to extract height
+          try {
+            const response = await fetch(`${baseUrl}/r/blockinfo/tip`, { cache: 'no-store' });
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.height && !isNaN(Number(data.height))) {
+                return data.height.toString();
+              }
+            }
+          } catch (e) {
+            console.error("Third height method failed:", e);
+          }
+          
+          return null;
+        };
+        
+        // Try to get the height
+        const height = await getBlockHeight();
+        
+        if (!height) {
+          appendToConsole("Could not retrieve block height", "error");
+          return;
         }
         
         url = `${baseUrl}/r/blockinfo/${height}`;
