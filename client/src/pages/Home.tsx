@@ -829,27 +829,141 @@ export default function Home() {
       845151: 1
     };
     
-    const loadOciData = async () => {
-      if (ociLoaded) {
-        appendToConsole("OCI data is already loaded.", "success");
+    const loadOciData = async (loadAllPages = false) => {
+      if (ociLoaded && !loadAllPages) {
+        appendToConsole("OCI data is already initialized.", "success");
         return true;
       }
       
       try {
-        appendToConsole("Loading Bitcoin Districts OCI data...", "system");
-        appendToConsole("This may take a few moments to understand the structure.", "system");
+        if (!ociLoaded) {
+          appendToConsole("Loading Bitcoin Districts OCI data...", "system");
+          appendToConsole("Initializing the OCI structure...", "system");
+          
+          // Initialize the structure for the OCI data
+          setOciData({
+            loaded: true,
+            pageUrls: pageUrls,
+            satIndices: satIndices,
+            loadedPages: {}
+          });
+          setOciLoaded(true);
+          
+          appendToConsole("OCI structure prepared.", "success");
+        }
         
-        // We're not actually loading the full OCI data, as it would need to fetch 9 inscriptions
-        // Instead, we're marking it as loaded and will fetch and process the specific page when needed
-        setOciData({
-          loaded: true,
-          pageUrls: pageUrls,
-          satIndices: satIndices,
-          loadedPages: {}
-        });
-        setOciLoaded(true);
+        // If loadAllPages is true, load all district data pages
+        if (loadAllPages) {
+          appendToConsole("Loading all district data pages...", "system");
+          
+          // Load each page sequentially
+          for (let page = 0; page < 9; page++) {
+            if (!ociData.loadedPages[page]) {
+              try {
+                appendToConsole(`Loading data for districts ${page * 100000} - ${(page + 1) * 100000 - 1}...`, "default");
+                
+                const url = `${baseUrl}${pageUrls[page]}`;
+                const response = await fetch(url, { cache: 'no-store' });
+                
+                if (!response.ok) {
+                  appendToConsole(`Error: Could not load district data for page ${page}. Server responded with ${response.status}`, "error");
+                  continue; // Skip this page but try the others
+                }
+                
+                let data;
+                const responseText = await response.text();
+                
+                // Fix for inconsistent (page 2 & 3) formatting (as per the OCI script)
+                if (page === 2 || page === 3) {
+                  try {
+                    data = JSON.parse('[' + responseText + ']');
+                    data = [data.slice(0, 99999), data.slice(100000, 199999)];
+                  } catch (error) {
+                    appendToConsole(`Error parsing district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
+                    continue;
+                  }
+                } else {
+                  try {
+                    // Try to parse JSON, handling different formatting possibilities
+                    try {
+                      data = JSON.parse(responseText.replaceAll('\\n  ', ''));
+                    } catch (e) {
+                      try {
+                        data = JSON.parse(responseText.replaceAll('  ', ''));
+                      } catch (e2) {
+                        // If both formats fail, try the direct parse
+                        data = JSON.parse(responseText);
+                      }
+                    }
+                  } catch (error) {
+                    appendToConsole(`Error parsing district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
+                    continue;
+                  }
+                }
+                
+                // Add debugging info about the data structure
+                appendToConsole(`Data structure received, analyzing format...`, "default");
+                
+                // Check if data is already in the correct format or needs processing
+                if (!Array.isArray(data) || data.length !== 2) {
+                  appendToConsole(`Warning: Unexpected data format in page ${page}. Attempting to normalize...`, "default");
+                  
+                  // Try to normalize the data structure if it's not in the expected format
+                  if (typeof data === 'object' && data !== null) {
+                    const keys = Object.keys(data);
+                    if (keys.length === 2 && Array.isArray(data[keys[0]]) && Array.isArray(data[keys[1]])) {
+                      data = [data[keys[0]], data[keys[1]]];
+                      appendToConsole(`Data structure normalized.`, "success");
+                    }
+                  }
+                }
+                
+                // Check if we have valid data structure after normalization
+                if (!Array.isArray(data) || data.length !== 2 || !Array.isArray(data[0]) || !Array.isArray(data[1])) {
+                  appendToConsole(`Error: Could not process data for page ${page} - invalid format`, "error");
+                  continue;
+                }
+                
+                try {
+                  // Rebuild full sat numbers from deltas
+                  const fullSats: number[] = [];
+                  data[0].forEach((sat: string | number, i: number) => {
+                    if (i === 0) {
+                      fullSats.push(parseInt(String(sat)));
+                    } else {
+                      fullSats.push(parseInt(String(fullSats[i-1])) + parseInt(String(sat)));
+                    }
+                  });
+                  
+                  // Put them back into correct order
+                  let filledArray = Array(100000).fill(0);
+                  data[1].forEach((index: number, i: number) => {
+                    if (i < fullSats.length) { // Make sure we don't exceed array bounds
+                      filledArray[index] = fullSats[i];
+                    }
+                  });
+                  
+                  appendToConsole(`Successfully processed ${fullSats.length} sat entries for page ${page}.`, "default");
+                } catch (error) {
+                  appendToConsole(`Error processing deltas in page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
+                  continue;
+                }
+                
+                // Store the loaded page
+                const updatedPages = { ...ociData.loadedPages };
+                updatedPages[page] = filledArray;
+                setOciData({ ...ociData, loadedPages: updatedPages });
+                
+                appendToConsole(`District data for page ${page} loaded successfully!`, "success");
+              } catch (error) {
+                appendToConsole(`Error loading district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
+              }
+            } else {
+              appendToConsole(`District data for page ${page} already loaded.`, "default");
+            }
+          }
+        }
         
-        appendToConsole("OCI structure prepared. District data will be loaded on demand.", "success");
         return true;
       } catch (error) {
         appendToConsole(`Error initializing OCI data: ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -880,8 +994,9 @@ export default function Home() {
             return null;
           }
           
-          let data;
+          // Load and parse the data
           const responseText = await response.text();
+          let data: any;
           
           // Fix for inconsistent (page 2 & 3) formatting (as per the OCI script)
           if (page === 2 || page === 3) {
@@ -889,7 +1004,7 @@ export default function Home() {
               data = JSON.parse('[' + responseText + ']');
               data = [data.slice(0, 99999), data.slice(100000, 199999)];
             } catch (error) {
-              appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+              appendToConsole(`Error parsing district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
               return null;
             }
           } else {
@@ -906,37 +1021,75 @@ export default function Home() {
                 }
               }
             } catch (error) {
-              appendToConsole(`Error parsing district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+              appendToConsole(`Error parsing district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
               return null;
             }
           }
           
-          // Rebuild full sat numbers from deltas
-          const fullSats: number[] = [];
-          data[0].forEach((sat: string | number, i: number) => {
-            if (i === 0) {
-              fullSats.push(parseInt(sat as string));
-            } else {
-              fullSats.push(parseInt(fullSats[i-1] as unknown as string) + parseInt(sat as string));
+          // Add debugging info about the data structure
+          appendToConsole(`Data structure received for page ${page}, analyzing format...`, "default");
+          
+          // Check if data is already in the correct format or needs processing
+          if (!Array.isArray(data) || data.length !== 2) {
+            appendToConsole(`Warning: Unexpected data format in page ${page}. Attempting to normalize...`, "default");
+            
+            // Try to normalize the data structure if it's not in the expected format
+            if (typeof data === 'object' && data !== null) {
+              const keys = Object.keys(data);
+              if (keys.length === 2 && Array.isArray(data[keys[0]]) && Array.isArray(data[keys[1]])) {
+                data = [data[keys[0]], data[keys[1]]];
+                appendToConsole(`Data structure normalized.`, "success");
+              }
             }
-          });
+          }
           
-          // Put them back into correct order
-          let filledArray = Array(100000).fill(0);
-          data[1].forEach((index: number, i: number) => {
-            filledArray[index] = fullSats[i];
-          });
+          // Check if we have valid data structure after normalization
+          if (!Array.isArray(data) || data.length !== 2 || !Array.isArray(data[0]) || !Array.isArray(data[1])) {
+            appendToConsole(`Error: Could not process data for page ${page} - invalid format`, "error");
+            return null;
+          }
           
-          // Store the loaded page
-          ociData.loadedPages[page] = filledArray;
-          appendToConsole(`District data for page ${page} loaded successfully!`, "success");
+          try {
+            // Rebuild full sat numbers from deltas
+            const fullSats: number[] = [];
+            data[0].forEach((sat: string | number, i: number) => {
+              if (i === 0) {
+                fullSats.push(parseInt(String(sat)));
+              } else {
+                fullSats.push(parseInt(String(fullSats[i-1])) + parseInt(String(sat)));
+              }
+            });
+            
+            // Put them back into correct order
+            const filledArray = Array(100000).fill(0);
+            data[1].forEach((index: number, i: number) => {
+              if (i < fullSats.length) { // Make sure we don't exceed array bounds
+                filledArray[index] = fullSats[i];
+              }
+            });
+            
+            // Store the loaded page
+            const updatedPages = { ...ociData.loadedPages };
+            updatedPages[page] = filledArray;
+            setOciData({ ...ociData, loadedPages: updatedPages });
+            
+            appendToConsole(`Successfully processed ${fullSats.length} sat entries for page ${page}.`, "default");
+            appendToConsole(`District data for page ${page} loaded successfully!`, "success");
+            
+            // Return the sat number for this district
+            return filledArray[districtNumber % 100000];
+            
+          } catch (error) {
+            appendToConsole(`Error processing deltas in page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
+            return null;
+          }
         } catch (error) {
-          appendToConsole(`Error loading district data: ${error instanceof Error ? error.message : String(error)}`, "error");
+          appendToConsole(`Error loading district data for page ${page}: ${error instanceof Error ? error.message : String(error)}`, "error");
           return null;
         }
       }
       
-      // Return the sat number for the district
+      // Page already loaded, return the sat number for the district
       return ociData.loadedPages[page][districtNumber % 100000];
     };
     
@@ -980,8 +1133,8 @@ export default function Home() {
       const subcommand = args[0].toUpperCase();
       
       if (subcommand === "LOAD") {
-        // Load the OCI data structure
-        await loadOciData();
+        // Load the OCI data structure and all pages
+        await loadOciData(true); // Pass true to load all pages
       } else {
         // Treat as a district number
         const districtNumber = parseInt(args[0], 10);
