@@ -245,9 +245,23 @@ export default function Home() {
             url = `${baseUrl}/r/inscription/${inscriptionId}/metadata`;
             response = await fetch(url);
             if (response.ok) {
-              data = await response.json();
-              appendToConsole("METADATA:", "success");
-              appendToConsole(JSON.stringify(data, null, 2), "json");
+              // First try to get metadata as JSON
+              const text = await response.text();
+              if (!text || text.trim() === "") {
+                appendToConsole("METADATA: No metadata available for this inscription", "system");
+              } else {
+                appendToConsole("METADATA:", "success");
+                try {
+                  // Try to parse as JSON first
+                  const jsonData = JSON.parse(text);
+                  appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+                } catch (parseError) {
+                  // If not JSON, just display the raw text
+                  appendToConsole(text, "default");
+                }
+              }
+            } else {
+              appendToConsole("METADATA: No metadata available for this inscription", "system");
             }
           } catch (error) {
             appendToConsole(`Error fetching METADATA: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
@@ -277,8 +291,26 @@ export default function Home() {
         case "METADATA":
           url = `${baseUrl}/r/inscription/${inscriptionId}/metadata`;
           response = await fetch(url);
-          data = await response.json();
-          appendToConsole(JSON.stringify(data, null, 2), "json");
+          
+          if (response.ok) {
+            // Get the text content of the metadata
+            const text = await response.text();
+            if (!text || text.trim() === "") {
+              appendToConsole("No metadata available for this inscription", "system");
+            } else {
+              appendToConsole("METADATA:", "success");
+              try {
+                // Try to parse as JSON first
+                const jsonData = JSON.parse(text);
+                appendToConsole(JSON.stringify(jsonData, null, 2), "json");
+              } catch (parseError) {
+                // If not JSON, just display the raw text
+                appendToConsole(text, "default");
+              }
+            }
+          } else {
+            appendToConsole("No metadata available for this inscription", "system");
+          }
           break;
           
         case "PARENTS":
