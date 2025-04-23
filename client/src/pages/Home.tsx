@@ -24,6 +24,8 @@ export default function Home() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(true);
+  const [ociData, setOciData] = useState<any>(null);
+  const [ociLoaded, setOciLoaded] = useState(false);
   
   const consoleRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -213,6 +215,11 @@ export default function Home() {
       appendToConsole("SAT - Get information about specific satoshis", "default");
       appendToConsole("TRANSACTION - Query transaction data", "default");
       appendToConsole("UTXO - View UTXO information", "default");
+      appendToConsole("", "default");
+      
+      // Bitcoin Districts Bitmap section
+      appendToConsole("Bitcoin Districts Bitmap:", "success");
+      appendToConsole("OCI - On-Chain Index for Bitcoin Districts (0-839999)", "default");
     } else {
       const commandName = args[0].toUpperCase();
       if (commandName in commands) {
@@ -789,6 +796,90 @@ export default function Home() {
     } finally {
       setIsProcessing(false);
     }
+  }
+  
+  // Handler for OCI (On-Chain Index) command for Bitcoin Districts
+  const handleOci = async (args: string[]) => {
+    setIsProcessing(true);
+    
+    const loadOciData = async () => {
+      if (ociLoaded) {
+        appendToConsole("OCI data is already loaded.", "success");
+        return true;
+      }
+      
+      try {
+        appendToConsole("Loading Bitcoin Districts OCI data...", "system");
+        appendToConsole("This may take a few moments to load the inscription.", "system");
+        
+        // Fetch the OCI inscription content which contains the bitmap lookup module
+        const inscriptionId = "840bc0df4ffc5a7ccedbee35e97506c9577160e233982e627d0045d06366e362i0";
+        const url = `${baseUrl}/content/${inscriptionId}`;
+        
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) {
+          appendToConsole(`Error: Could not load OCI data. Server responded with ${response.status}`, "error");
+          return false;
+        }
+        
+        const ociScriptText = await response.text();
+        
+        // Parse the OCI module which contains the Bitcoin Districts mapping data
+        try {
+          // We'll store the OCI module text for reference but not execute it directly
+          // Instead, we'll implement our own parser for the Bitmap lookup based on its structure
+          setOciData(ociScriptText);
+          setOciLoaded(true);
+          appendToConsole("OCI data successfully loaded!", "success");
+          return true;
+        } catch (error) {
+          appendToConsole(`Error parsing OCI data: ${error}`, "error");
+          return false;
+        }
+      } catch (error) {
+        appendToConsole(`Error loading OCI data: ${error}`, "error");
+        return false;
+      }
+    };
+    
+    // Check if a specific command was provided
+    if (args.length > 0) {
+      const subcommand = args[0].toUpperCase();
+      
+      if (subcommand === "LOAD") {
+        // Load the OCI data
+        await loadOciData();
+      } else {
+        // Treat as a district number
+        const districtNumber = parseInt(args[0], 10);
+        
+        if (isNaN(districtNumber)) {
+          appendToConsole(`Invalid district number: ${args[0]}`, "error");
+        } else if (districtNumber < 0 || districtNumber > 839999) {
+          appendToConsole(`District number must be between 0 and 839999`, "error");
+        } else {
+          // First make sure the OCI data is loaded
+          const loaded = ociLoaded || await loadOciData();
+          
+          if (loaded) {
+            // For now, we'll display a placeholder message since we need to implement the actual parsing
+            appendToConsole(`Resolving sat number for Bitcoin District #${districtNumber}...`, "default");
+            appendToConsole(`The OCI inscription is loaded, but processing is coming soon!`, "system");
+          }
+        }
+      }
+    } else {
+      // No arguments provided, show OCI status
+      if (ociLoaded) {
+        appendToConsole("OCI Status: Bitcoin Districts data is loaded.", "success");
+        appendToConsole("Use OCI <district_number> to lookup the sat number for a specific district.", "default");
+      } else {
+        appendToConsole("OCI Status: Bitcoin Districts data is not loaded.", "default");
+        appendToConsole("Use OCI LOAD to load the data, or OCI <district_number> to load and lookup.", "default");
+      }
+    }
+    
+    setIsProcessing(false);
   };
   
 
@@ -904,6 +995,15 @@ INSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN`,
       description: "Clear the console.",
       usage: "CLEAR",
       handler: handleClear
+    },
+    OCI: {
+      description: "On-Chain Index for Bitcoin Districts (0-839999).",
+      usage: "OCI [LOAD|<district_number>]",
+      details:
+`OCI : Shows current OCI status
+OCI LOAD : Loads sat numbers for bitmap districts 0-839999
+OCI <district_number> : Resolves the specific district's sat number`,
+      handler: handleOci
     }
   };
   
