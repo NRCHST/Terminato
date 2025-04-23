@@ -245,8 +245,6 @@ export default function Home() {
     }
   };
   
-  // escapeHtml is already defined above
-  
   // Format JSON with syntax highlighting
   const formatJsonOutput = (jsonString: string): string => {
     return escapeHtml(jsonString)
@@ -257,29 +255,32 @@ export default function Home() {
   
   // Format ordinals metadata string with key-value pairs
   const formatMetadataString = (metadata: string): string => {
-    // Special case for Ordinals metadata which is often in format key:value
+    // Special case for Ordinals metadata (example: "PHOTOGRAPHER:PARKER DAY|CAMERA:CANON EOS-1V...")
     try {
-      // Split by visible separators, usually a mix of spaces and colons
-      const items = metadata.split(/(?=\w+:)/g);
+      // For the specific formatting in the screenshot, we need to detect key-value pairs
+      // that are structured as KEY:VALUE with possible spaces
       
-      // Process each key-value pair
-      const formattedItems = items
-        .map(item => item.trim())
-        .filter(item => item.length > 0)
-        .map(item => {
-          // Extract key and value if they exist
-          const parts = item.split(':');
-          if (parts.length >= 2) {
-            const key = parts[0].trim();
-            // Join the rest back in case value has colons
-            const value = parts.slice(1).join(':').trim();
-            return `<span class="text-blue-400">${escapeHtml(key)}</span>: <span class="text-green-400">${escapeHtml(value)}</span>`;
-          }
-          return escapeHtml(item);
-        });
+      // First, try to identify if this is a typical Ordinals metadata string
+      // with multiple key:value pairs separated by spaces or special characters
       
-      // Join with line breaks for better readability
-      return formattedItems.join('<br />');
+      // Different patterns we might see:
+      // 1. KEY:VALUE KEY2:VALUE2 (space separated)
+      // 2. KEY:VALUE|KEY2:VALUE2 (pipe separated)
+      // 3. KEY:VALUE;KEY2:VALUE2 (semicolon separated)
+      
+      // Replace common separators with a standard one
+      let normalized = metadata.replace(/\s*\|\s*/g, '\n').replace(/\s*;\s*/g, '\n');
+      
+      // Look for patterns where we have multiple "word:word" sequences
+      const keyValuePattern = /\b([A-Z0-9]+):([\w\s.,/()%&'"-]+)(?=\s+[A-Z0-9]+:|$)/g;
+      
+      // Format to highlight the keys and values
+      const formattedContent = normalized.replace(keyValuePattern, (match, key, value) => {
+        return `<span class="text-blue-400">${escapeHtml(key)}</span>: <span class="text-green-400">${escapeHtml(value.trim())}</span>\n`;
+      });
+      
+      // Return the formatted string with line breaks
+      return formattedContent.trim().replace(/\n/g, '<br />');
     } catch (error) {
       // In case of error, return the original string
       console.error("Error formatting metadata:", error);
