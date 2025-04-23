@@ -884,27 +884,12 @@ export default function Home() {
           const responseText = await response.text();
           
           try {
-            // Add special handling for page 0 and 1
+            // Add error handling for page 0 and 1
             if (page === 0 || page === 1) {
-              // For pages 0 and 1, we need to adapt to a different data structure
-              // Instead of trying to parse the content, we'll use a fallback approach
-              appendToConsole(`Special handling for page ${page}...`, "default");
-              
-              // Create a synthetic dataset for these two pages 
-              // The basic algorithm for Districts is to start at 1000000 and add district number
-              const baseNumber = 1000000;
-              const start = page * 100000;
-              
-              let filledArray = Array(100000).fill(0);
-              for (let i = 0; i < 100000; i++) {
-                filledArray[i] = baseNumber + start + i;
-              }
-              
-              data = [[], []];
-              ociData.loadedPages[page] = filledArray;
-              
-              appendToConsole(`District data for page ${page} generated using basic algorithm.`, "success");
-              return filledArray[districtNumber % 100000];
+              // Currently, there's an issue with parsing these pages properly
+              appendToConsole(`Error: Districts in page ${page} (${page * 100000}-${(page + 1) * 100000 - 1}) are not available due to data format issues.`, "error");
+              appendToConsole("Please try a district number between 200000-839999 which can be properly processed.", "default");
+              return null;
             }
             // Fix for inconsistent (page 2 & 3) formatting (as per the OCI script)
             else if (page === 2 || page === 3) {
@@ -928,7 +913,7 @@ export default function Home() {
             return null;
           }
           
-          // Skip the data processing for pages 0 and 1 as they're already handled
+          // Only process data for pages 2-8
           if (page !== 0 && page !== 1) {
             // Rebuild full sat numbers from deltas
             const fullSats: number[] = [];
@@ -948,8 +933,10 @@ export default function Home() {
             
             // Store the loaded page
             ociData.loadedPages[page] = filledArray;
+            
+            // Only show success message for properly processed pages
+            appendToConsole(`District data for page ${page} loaded successfully!`, "success");
           }
-          appendToConsole(`District data for page ${page} loaded successfully!`, "success");
         } catch (error) {
           appendToConsole(`Error loading district data: ${error instanceof Error ? error.message : String(error)}`, "error");
           return null;
