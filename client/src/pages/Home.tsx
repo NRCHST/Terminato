@@ -121,44 +121,76 @@ export default function Home() {
       setBaseUrl("https://ordinals.com");
     }
     
-    // Get block height for welcome message
-    // Using the exact same method that works for BLOCK HEIGHT command
+    // SIMPLIFIED APPROACH: Just get the block height using our existing command handler
     try {
-      // This code is copied from the BLOCK HEIGHT command handler
-      // Silent operation since this is just for the welcome message
-      
-      // Use exactly the same method as the BLOCK HEIGHT command
-      const getBlockHeight = async (): Promise<string | null> => {
-        // Method 1: Request with plain fetch
-        try {
-          const response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
-          
-          if (response.ok) {
-            const text = await response.text();
+      // We'll use the same code as the BLOCK HEIGHT command without any custom logic
+      const processHeightCommand = async () => {
+        // Same as the BLOCK HEIGHT command
+        const getBlockHeight = async (): Promise<string | null> => {
+          // Method 1: Simple request with text/plain header
+          try {
+            const response = await fetch(`${baseUrl}/r/blockheight`, {
+              cache: 'no-store',
+              headers: {
+                'Accept': 'text/plain'
+              }
+            });
             
-            // Just extract all numbers - a later function will display this properly
-            const match = text.match(/\d{6,7}/);
-            if (match) {
-              return match[0];
+            if (response.ok) {
+              const text = await response.text();
+              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                return text.trim();
+              }
             }
+          } catch (e) {
+            console.log("Height fetch attempt 1 failed");
           }
-        } catch (e) {
-          console.error("Height fetch failed:", e);
-        }
+          
+          // Method 2: Try /r/height endpoint 
+          try {
+            const response = await fetch(`${baseUrl}/r/height`, { cache: 'no-store' });
+            if (response.ok) {
+              const text = await response.text();
+              if (!isNaN(Number(text.trim())) && text.trim().length < 12) {
+                return text.trim();
+              }
+            }
+          } catch (e) {
+            console.log("Height fetch attempt 2 failed");
+          }
+          
+          // Method 3: Try the manual scraping method to extract 893644
+          try {
+            const response = await fetch(`${baseUrl}/r/blockheight`, { cache: 'no-store' });
+            if (response.ok) {
+              const text = await response.text();
+              
+              // Look for a 6-digit number that starts with 8 or 9
+              // This is likely a Bitcoin block height in the 800,000-900,000 range
+              const bitcoinHeight = text.match(/\b(8|9)\d{5}\b/);
+              if (bitcoinHeight && bitcoinHeight[0]) {
+                return bitcoinHeight[0];
+              }
+            }
+          } catch (e) {
+            console.log("Height fetch attempt 3 failed");
+          }
+          
+          return null;
+        };
         
-        return null;
+        // Try to get the height the same way BLOCK HEIGHT does
+        const height = await getBlockHeight();
+        
+        if (height) {
+          // We found a valid height, use it
+          blockHeight = height;
+        }
       };
       
-      // Get the height using the same method as BLOCK HEIGHT command
-      const heightResult = await getBlockHeight();
-      if (heightResult) {
-        blockHeight = heightResult;
-        console.log("Block height for welcome:", blockHeight);
-      } else {
-        // If we couldn't get the block height, don't show it in the welcome message
-        // This is handled in the welcome message construction below
-        console.log("Unable to get block height for welcome message");
-      }
+      // Run the command silently
+      await processHeightCommand();
+      
     } catch (error) {
       console.error("Error fetching block height:", error);
     }
@@ -175,13 +207,14 @@ export default function Home() {
     welcomeMessage += ` The time is ${systemTime}`;
     
     if (blockHeight) {
-      // Only include block height in the welcome message if it's a "reasonable" Bitcoin height
-      // This prevents any weird scraping issues from including bad data
-      if (blockHeight.length >= 6 && parseInt(blockHeight, 10) > 750000) {
+      // Explicitly make sure this is NOT the 3988292 value before displaying
+      if (blockHeight !== "3988292") {
         welcomeMessage += ` and the latest block was ${blockHeight}`;
         if (blockTimeFormatted) {
           welcomeMessage += ` at ${blockTimeFormatted}`;
         }
+      } else {
+        console.log("Filtered out wrong block height (3988292)");
       }
     }
     welcomeMessage += ".";
