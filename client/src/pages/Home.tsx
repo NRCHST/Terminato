@@ -15,7 +15,7 @@ interface Command {
 }
 
 export default function Home() {
-  const [currentMode, setCurrentMode] = useState<"TEST" | "LIVE">("TEST");
+  const [currentMode, setCurrentMode] = useState<"WEB" | "ORD">("WEB");
   const [baseUrl, setBaseUrl] = useState("https://ordinals.com");
   const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([
     { text: "Welcome to Termina (test build)! Type HELP to see your options.", type: "system" }
@@ -114,7 +114,7 @@ export default function Home() {
       
       // Configuration section with different color
       appendToConsole("Configuration:", "success");
-      appendToConsole("MODE - Switch between TEST and LIVE mode", "default");
+      appendToConsole("MODE - Switch between WEB and ORD mode", "default");
       appendToConsole("CLEAR - Clear the console", "default");
       appendToConsole("", "default");
       
@@ -151,16 +151,16 @@ export default function Home() {
     }
     
     const mode = args[0].toUpperCase();
-    if (mode === "TEST") {
-      setCurrentMode("TEST");
+    if (mode === "WEB") {
+      setCurrentMode("WEB");
       setBaseUrl("https://ordinals.com");
-      appendToConsole("Switched to TEST mode. Using https://ordinals.com prefix.", "success");
-    } else if (mode === "LIVE") {
-      setCurrentMode("LIVE");
+      appendToConsole("Switched to WEB mode. Using https://ordinals.com prefix.", "success");
+    } else if (mode === "ORD") {
+      setCurrentMode("ORD");
       setBaseUrl("");
-      appendToConsole("Switched to LIVE mode. Using no prefix.", "success");
+      appendToConsole("Switched to ORD mode. Using no prefix (requires local ord server).", "success");
     } else {
-      appendToConsole(`Invalid mode: ${mode}. Available modes: TEST, LIVE`, "error");
+      appendToConsole(`Invalid mode: ${mode}. Available modes: WEB, ORD`, "error");
     }
   };
   
@@ -462,11 +462,11 @@ export default function Home() {
       handler: handleHelp
     },
     MODE: {
-      description: "Switch between TEST and LIVE mode.",
-      usage: "MODE [TEST|LIVE]",
+      description: "Switch between WEB and ORD mode.",
+      usage: "MODE [WEB|ORD]",
       details: 
-`MODE TEST : switches to TEST mode, with https://ordinals.com prefix for recursive endpoints
-MODE LIVE : switches to LIVE mode, without https://ordinals.com prefix for recursive endpoints`,
+`MODE WEB : switches to WEB mode, with https://ordinals.com prefix for recursive endpoints
+MODE ORD : switches to ORD mode, without prefix (requires local ord server)`,
       handler: handleMode
     },
     BLOCK: {
@@ -479,10 +479,9 @@ BLOCK <hash/height> : get block info at specified HASH or HEIGHT`,
     },
     INSCRIPTION: {
       description: "Query inscription data.",
-      usage: "INSCRIPTION <inscription_id> [ALL|CONTENT|UNDELEGATED|INFO|METADATA|PARENTS|CHILDREN]",
+      usage: "INSCRIPTION <inscription_id> [CONTENT|UNDELEGATED|INFO|METADATA|PARENTS|CHILDREN]",
       details: 
-`INSCRIPTION <inscription_id> : This is the main command, resolves ALL by default
-INSCRIPTION <inscription_id> ALL : Returns content, undelegated content, inscription info, metadata, inscriptions on sat, parents, children
+`INSCRIPTION <inscription_id> : This is the main command, returns all information
 INSCRIPTION <inscription_id> CONTENT : Return content only of inscription
 INSCRIPTION <inscription_id> UNDELEGATED : Return undelegated content of inscription
 INSCRIPTION <inscription_id> INFO : Return inscription info
@@ -494,7 +493,7 @@ INSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN`,
     SAT: {
       description: "Get information about specific satoshis.",
       usage: "SAT <number>",
-      details: `SAT <number> : Get information about a specific satoshi`,
+      details: `SAT <number> : Check inscriptions on a specific SAT`,
       handler: handleSat
     },
     TRANSACTION: {
