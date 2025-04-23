@@ -882,22 +882,34 @@ export default function Home() {
               
               const responseText = await response.text();
               
-              // Process based on page format
-              if (page === 2 || page === 3) {
-                // Special handling for pages 2 & 3
-                data = JSON.parse('[' + responseText + ']');
-                data = [data.slice(0, 99999), data.slice(100000, 199999)];
-              } else {
-                // Handle other pages
-                try {
-                  data = JSON.parse(responseText.replaceAll('\\n  ', ''));
-                } catch (e) {
+              // Process based on page format as seen in the Browser implementation
+              try {
+                if (page === 2 || page === 3) {
+                  // Special handling for pages 2 & 3
+                  data = JSON.parse('[' + responseText + ']');
+                  data = [data.slice(0, 99999), data.slice(100000, 199999)];
+                } else {
+                  // Try different parsing approaches for other pages (including 0 and 1)
                   try {
-                    data = JSON.parse(responseText.replaceAll('  ', ''));
-                  } catch (e2) {
-                    data = JSON.parse(responseText);
+                    data = JSON.parse(responseText.replaceAll('\\n  ', ''));
+                  } catch (e) {
+                    try {
+                      data = JSON.parse(responseText.replaceAll('  ', ''));
+                    } catch (e2) {
+                      // Direct parse as last resort
+                      data = JSON.parse(responseText);
+                    }
                   }
                 }
+              
+                // Verify the data format to avoid errors
+                if (!Array.isArray(data) || !Array.isArray(data[0]) || !Array.isArray(data[1])) {
+                  appendToConsole(`Error: Unexpected data format for page ${page}`, "error");
+                  return false;
+                }
+              } catch (parseError) {
+                appendToConsole(`Error parsing data for page ${page}: ${parseError instanceof Error ? parseError.message : String(parseError)}`, "error");
+                return false;
               }
               
               // Rebuild full sat numbers from deltas
@@ -1060,7 +1072,7 @@ export default function Home() {
         appendToConsole("Use OCI <district_number> to lookup the sat number for a specific district.", "default");
         
         // Show how many district pages are loaded
-        const loadedPages = ociData.pages ? ociData.pages.filter(p => p !== 0).length : 0;
+        const loadedPages = ociData.pages ? ociData.pages.filter((p: any) => p !== 0).length : 0;
         appendToConsole(`${loadedPages} of 9 district pages are currently loaded.`, "default");
         appendToConsole("Pages are loaded on demand when you query a district number.", "default");
       } else {
