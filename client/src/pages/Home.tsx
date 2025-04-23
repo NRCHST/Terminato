@@ -111,7 +111,7 @@ export default function Home() {
   const handleHelp = (args: string[]) => {
     if (args.length === 0) {
       appendToConsole("For more information on a specific command, type HELP command-name. Your options are:", "system");
-      appendToConsole(Object.keys(commands).join("\n"), "default");
+      appendToConsole("MODE\nBLOCK\nINSCRIPTION\nSAT\nTRANSACTION\nUTXO\nCLEAR", "default");
     } else {
       const commandName = args[0].toUpperCase();
       if (commandName in commands) {
@@ -148,12 +148,6 @@ export default function Home() {
   };
   
   const handleBlock = async (args: string[]) => {
-    if (args.length === 0) {
-      appendToConsole("Please specify a BLOCK command. Type HELP BLOCK for options.", "error");
-      return;
-    }
-    
-    const subcommand = args[0].toUpperCase();
     setIsProcessing(true);
     
     try {
@@ -161,47 +155,23 @@ export default function Home() {
       let response;
       let data;
       
-      switch (subcommand) {
-        case "HASH":
-          if (args.length > 1) {
-            url = `${baseUrl}/r/blockhash/${args[1]}`;
-          } else {
-            url = `${baseUrl}/r/blockhash`;
-          }
-          
-          response = await fetch(url);
-          data = await response.text();
-          appendToConsole(data, "json");
-          break;
-          
-        case "HEIGHT":
-          url = `${baseUrl}/r/blockheight`;
-          response = await fetch(url);
-          data = await response.text();
-          appendToConsole(data, "default");
-          break;
-          
-        case "TIME":
-          url = `${baseUrl}/r/blocktime`;
-          response = await fetch(url);
-          data = await response.text();
-          appendToConsole(`Block timestamp: ${data}`, "default");
-          appendToConsole(`Date: ${new Date(parseInt(data) * 1000).toUTCString()}`, "default");
-          break;
-          
-        case "INFO":
-          if (args.length < 2) {
-            appendToConsole("Please provide a block hash or height.", "error");
-            break;
-          }
-          url = `${baseUrl}/r/blockinfo/${args[1]}`;
-          response = await fetch(url);
-          data = await response.json();
-          appendToConsole(JSON.stringify(data, null, 2), "json");
-          break;
-          
-        default:
-          appendToConsole(`Unknown BLOCK subcommand: ${subcommand}. Type HELP BLOCK for options.`, "error");
+      // Determine if this is a LATEST request or a specific block hash/height
+      if (args.length === 0 || args[0].toUpperCase() === "LATEST") {
+        // Get the latest block info
+        url = `${baseUrl}/r/blockinfo/$(${baseUrl}/r/blockheight)`;
+        response = await fetch(`${baseUrl}/r/blockheight`);
+        const height = await response.text();
+        url = `${baseUrl}/r/blockinfo/${height}`;
+        response = await fetch(url);
+        data = await response.json();
+        appendToConsole(JSON.stringify(data, null, 2), "json");
+      } else {
+        // Handle block by hash or height
+        const blockId = args[0]; // Could be a hash or height
+        url = `${baseUrl}/r/blockinfo/${blockId}`;
+        response = await fetch(url);
+        data = await response.json();
+        appendToConsole(JSON.stringify(data, null, 2), "json");
       }
     } catch (error) {
       if (error instanceof Error) {
@@ -346,13 +316,13 @@ export default function Home() {
     MODE: {
       description: "Switch between TEST and LIVE mode.",
       usage: "MODE [TEST|LIVE]",
-      details: "MODE TEST : uses https://ordinals.com prefix for endpoints\nMODE LIVE : uses no prefix for endpoints",
+      details: "MODE TEST : switches to TEST mode, with https://ordinals.com prefix for recursive endpoints\nMODE LIVE : switches to LIVE mode, without https://ordinals.com prefix for recursive endpoints",
       handler: handleMode
     },
     BLOCK: {
       description: "Retrieve block information.",
-      usage: "BLOCK [HASH|HEIGHT|TIME|INFO <hash or height>]",
-      details: "BLOCK HASH : Get latest block hash\nBLOCK HASH <height> : Get block hash at specified height\nBLOCK HEIGHT : Get latest block height\nBLOCK TIME : Get timestamp of latest block\nBLOCK INFO <hash or height> : Get detailed information about a block",
+      usage: "BLOCK [LATEST|<hash or height>]",
+      details: "BLOCK LATEST : get latest block info\nBLOCK {hash/height} : get block info at specified HASH or HEIGHT",
       handler: handleBlock
     },
     INSCRIPTION: {
@@ -400,17 +370,6 @@ export default function Home() {
   
   return (
     <div className="bg-[#1E1E1E] text-[#E0E0E0] font-mono h-screen flex flex-col">
-      {/* Header */}
-      <header className="p-4 border-b border-[#424242] flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          <div className="h-3 w-3 rounded-full bg-[#FF5252]"></div>
-          <div className="h-3 w-3 rounded-full bg-[#F5A623]"></div>
-          <div className="h-3 w-3 rounded-full bg-[#4CAF50]"></div>
-        </div>
-        <h1 className="text-xl font-bold text-[#F5A623]">TERMINA</h1>
-        <div className="text-sm text-[#E0E0E0] opacity-70">{currentMode} MODE</div>
-      </header>
-
       {/* Console Output */}
       <div
         ref={consoleRef}
@@ -465,26 +424,26 @@ export default function Home() {
             </div>
           );
         })}
+        
+        {/* Inline Command Input */}
+        <div className="flex items-center mt-2">
+          <span className="text-[#F5A623] mr-2">&gt;</span>
+          <input 
+            ref={inputRef}
+            type="text" 
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleCommandInput}
+            className="bg-transparent flex-1 outline-none border-none font-mono text-[#E0E0E0]"
+            autoFocus
+            autoComplete="off"
+            disabled={isProcessing}
+          />
+          <span className="animate-[blink_1.2s_infinite]">|</span>
+        </div>
       </div>
 
-      {/* Command Input */}
-      <div className="border-t border-[#424242] p-4 flex items-center">
-        <span className="text-[#F5A623] mr-2">&gt;</span>
-        <input 
-          ref={inputRef}
-          type="text" 
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleCommandInput}
-          className="bg-transparent flex-1 outline-none border-none font-mono text-[#E0E0E0]"
-          autoFocus
-          autoComplete="off"
-          disabled={isProcessing}
-        />
-        <span className="animate-[blink_1.2s_infinite]">|</span>
-      </div>
-
-      <style jsx global>{`
+      <style>{`
         /* Custom scrollbar for webkit browsers */
         ::-webkit-scrollbar {
           width: 8px;
