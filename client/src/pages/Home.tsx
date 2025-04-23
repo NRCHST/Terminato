@@ -121,7 +121,7 @@ export default function Home() {
     // Just proceed with a simple welcome message
     
     // Construct welcome message - simplified without block height
-    welcomeMessage = `Welcome to Termina. You are in ${currentMode} mode.`;
+    welcomeMessage = `Welcome to Termina.`;
     welcomeMessage += ` The time is ${systemTime}.`;
     
     appendToConsole(welcomeMessage, "system");
