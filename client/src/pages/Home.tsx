@@ -905,30 +905,68 @@ export default function Home() {
                     // Try to parse with additional wrapping
                     appendToConsole(`Page ${page} might need wrapping, trying with additional brackets`, "default");
                     try {
-                      // Try to construct a valid array of arrays structure
-                      const fixedResponse = responseText.replaceAll('\\n', '').replaceAll('\\"', '"');
-                      data = JSON.parse(fixedResponse);
+                      // For page 0, we need to handle a special case where the data is a JSON string inside a JSON string
+                      // Try to parse the JSON string if needed
+                      if (responseText.includes('\\n') || responseText.includes('\\"')) {
+                        appendToConsole(`Page ${page} contains escaped JSON, fixing...`, "default");
+                        // This might be a JSON string inside a JSON string, try to fix it
+                        try {
+                          // First parse to get the inner string
+                          const parsed = JSON.parse(responseText);
+                          
+                          if (typeof parsed === 'string') {
+                            // If it's a string, try to parse it again
+                            appendToConsole(`Parsed to string, now parsing inner JSON...`, "default");
+                            const innerParsed = JSON.parse(parsed);
+                            data = innerParsed;
+                          } else {
+                            data = parsed;
+                          }
+                        } catch (e) {
+                          appendToConsole(`Failed first parse approach: ${e instanceof Error ? e.message : String(e)}`, "default");
+                          
+                          // Try a different approach - remove escapes
+                          const fixedResponse = responseText.replaceAll('\\n', '').replaceAll('\\"', '"');
+                          data = JSON.parse(fixedResponse);
+                        }
+                      } else {
+                        // If no escapes, just parse it directly
+                        data = JSON.parse(responseText);
+                      }
                       
-                      // If it's not an array of arrays, make it one
-                      if (!Array.isArray(data[0])) {
+                      // Make sure we have the expected array of arrays structure
+                      appendToConsole(`Checking data structure for page ${page}...`, "default");
+                      
+                      if (Array.isArray(data) && Array.isArray(data[0]) && Array.isArray(data[1])) {
+                        appendToConsole(`Data structure looks good for page ${page}`, "default");
+                      } else {
                         appendToConsole(`Restructuring page ${page} data format`, "default");
                         
-                        // Create a structure with two arrays similar to the expected format
-                        // First, scan through the data to find all the indices of saturation
+                        // If data is not already in the expected format, try to convert it
+                        let deltas: number[] = [];
                         let indices: number[] = [];
-                        let values: number[] = [];
                         
-                        // If data is an object with key-value pairs, extract keys as indices and values as satoshis
-                        if (typeof data === 'object' && !Array.isArray(data)) {
+                        // If it's a plain array, assume it's deltas
+                        if (Array.isArray(data) && !Array.isArray(data[0])) {
+                          deltas = data.map((d: any) => parseInt(d));
+                          // Generate sequential indices
+                          indices = Array.from({length: deltas.length}, (_, i) => i);
+                        } 
+                        // If it's an object, extract key-value pairs
+                        else if (typeof data === 'object' && !Array.isArray(data)) {
                           for (const [index, value] of Object.entries(data)) {
                             if (!isNaN(parseInt(index)) && !isNaN(parseInt(value as string))) {
                               indices.push(parseInt(index));
-                              values.push(parseInt(value as string));
+                              deltas.push(parseInt(value as string));
                             }
                           }
-                          
-                          // Create the expected data structure
-                          data = [values, indices];
+                        }
+                        
+                        if (deltas.length > 0 && indices.length > 0) {
+                          appendToConsole(`Created arrays with ${deltas.length} deltas and ${indices.length} indices`, "default");
+                          data = [deltas, indices];
+                        } else {
+                          appendToConsole(`Could not restructure data properly, data might be invalid`, "error");
                         }
                       }
                     } catch (e) {
