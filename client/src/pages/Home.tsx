@@ -242,8 +242,11 @@ export default function Home() {
           
           // Get metadata if available
           try {
-            url = `${baseUrl}/r/inscription/${inscriptionId}/metadata`;
+            // Try using metadata endpoint
+            url = `${baseUrl}/r/metadata/${inscriptionId}`;
+            appendToConsole(`Fetching metadata from: ${url}`, "default");
             response = await fetch(url);
+            
             if (response.ok) {
               // First try to get metadata as JSON
               const text = await response.text();
@@ -289,7 +292,9 @@ export default function Home() {
           break;
           
         case "METADATA":
-          url = `${baseUrl}/r/inscription/${inscriptionId}/metadata`;
+          // Try using the direct metadata endpoint
+          url = `${baseUrl}/r/metadata/${inscriptionId}`;
+          appendToConsole(`Fetching metadata from: ${url}`, "default");
           response = await fetch(url);
           
           if (response.ok) {
