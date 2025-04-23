@@ -111,13 +111,16 @@ export default function Home() {
   const handleHelp = (args: string[]) => {
     if (args.length === 0) {
       appendToConsole("For more information on a specific command, type HELP command-name. Your options are:", "system");
+      appendToConsole("Configuration:", "system");
       appendToConsole("MODE - Switch between TEST and LIVE mode", "default");
+      appendToConsole("CLEAR - Clear the console", "default");
+      appendToConsole("", "default");
+      appendToConsole("Ordinals Recursive Endpoints:", "system");
       appendToConsole("BLOCK - Retrieve block information", "default");
       appendToConsole("INSCRIPTION - Query inscription data", "default");
       appendToConsole("SAT - Get information about specific satoshis", "default");
       appendToConsole("TRANSACTION - Query transaction data", "default");
       appendToConsole("UTXO - View UTXO information", "default");
-      appendToConsole("CLEAR - Clear the console", "default");
     } else {
       const commandName = args[0].toUpperCase();
       if (commandName in commands) {
@@ -284,16 +287,16 @@ export default function Home() {
   
   const handleUtxo = async (args: string[]) => {
     if (args.length === 0) {
-      appendToConsole("Please specify a Bitcoin address. Type HELP UTXO for options.", "error");
+      appendToConsole("Please specify a UTXO in the format txid:vout. Type HELP UTXO for options.", "error");
       return;
     }
     
-    const address = args[0];
+    const utxoParam = args[0];
     setIsProcessing(true);
     
     try {
-      const url = `${baseUrl}/r/address/${address}/utxo`;
-      appendToConsole(`Fetching UTXOs from: ${url}`, "default");
+      const url = `${baseUrl}/r/utxo/${utxoParam}`;
+      appendToConsole(`Fetching UTXO information from: ${url}`, "default");
       
       const response = await fetch(url);
       
@@ -301,7 +304,7 @@ export default function Home() {
       if (!response.ok) {
         appendToConsole(`Error: Server responded with status ${response.status}`, "error");
         if (response.status === 404) {
-          appendToConsole("Address not found or has no UTXOs", "error");
+          appendToConsole("UTXO not found", "error");
         }
         return;
       }
@@ -309,7 +312,7 @@ export default function Home() {
       // Check the response text before parsing to avoid JSON errors
       const text = await response.text();
       if (!text || text.trim() === "") {
-        appendToConsole("No UTXOs found for this address", "default");
+        appendToConsole("No information found for this UTXO", "default");
         return;
       }
       
@@ -374,8 +377,8 @@ export default function Home() {
     },
     UTXO: {
       description: "View UTXO information.",
-      usage: "UTXO <address>",
-      details: "UTXO <address> : List UTXOs for a Bitcoin address",
+      usage: "UTXO <txid:vout>",
+      details: "UTXO <txid:vout> : Get information about a specific UTXO in the format txid:vout",
       handler: handleUtxo
     },
     CLEAR: {
