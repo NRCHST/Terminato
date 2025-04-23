@@ -245,12 +245,46 @@ export default function Home() {
     }
   };
   
+  // escapeHtml is already defined above
+  
   // Format JSON with syntax highlighting
   const formatJsonOutput = (jsonString: string): string => {
     return escapeHtml(jsonString)
       .replace(/(".*?")/g, '<span class="text-blue-400">$1</span>')
       .replace(/\b(true|false|null)\b/g, '<span class="text-red-400">$1</span>')
       .replace(/\b(\d+)\b/g, '<span class="text-green-400">$1</span>');
+  };
+  
+  // Format ordinals metadata string with key-value pairs
+  const formatMetadataString = (metadata: string): string => {
+    // Special case for Ordinals metadata which is often in format key:value
+    try {
+      // Split by visible separators, usually a mix of spaces and colons
+      const items = metadata.split(/(?=\w+:)/g);
+      
+      // Process each key-value pair
+      const formattedItems = items
+        .map(item => item.trim())
+        .filter(item => item.length > 0)
+        .map(item => {
+          // Extract key and value if they exist
+          const parts = item.split(':');
+          if (parts.length >= 2) {
+            const key = parts[0].trim();
+            // Join the rest back in case value has colons
+            const value = parts.slice(1).join(':').trim();
+            return `<span class="text-blue-400">${escapeHtml(key)}</span>: <span class="text-green-400">${escapeHtml(value)}</span>`;
+          }
+          return escapeHtml(item);
+        });
+      
+      // Join with line breaks for better readability
+      return formattedItems.join('<br />');
+    } catch (error) {
+      // In case of error, return the original string
+      console.error("Error formatting metadata:", error);
+      return escapeHtml(metadata);
+    }
   };
   
   // Handle command input
@@ -546,14 +580,24 @@ export default function Home() {
                     // Convert hex to text
                     const decoded = hexToText(hexString);
                     
-                    // Check if the decoded result is valid JSON
-                    try {
-                      const jsonObj = JSON.parse(decoded);
-                      appendToConsole("METADATA (JSON):", "success");
-                      appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
-                    } catch (jsonError) {
-                      // Not JSON, just show as decoded text
-                      appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                    // First check if it's a typical Ordinals metadata with key-value pairs
+                    if (decoded.includes(':') && !decoded.includes('{') && !decoded.includes('[')) {
+                      // This looks like Ordinals metadata with key-value pairs
+                      appendToConsole("METADATA (Formatted):", "success");
+                      
+                      // Format into a more readable structure with each key-value on a new line
+                      const formattedText = formatMetadataString(decoded);
+                      appendToConsole(formattedText, "default");
+                    } else {
+                      // Check if the decoded result is valid JSON
+                      try {
+                        const jsonObj = JSON.parse(decoded);
+                        appendToConsole("METADATA (JSON):", "success");
+                        appendToConsole(JSON.stringify(jsonObj, null, 2), "json");
+                      } catch (jsonError) {
+                        // Not JSON, just show as decoded text
+                        appendToConsole(`Hex Decoded: ${decoded}`, "success");
+                      }
                     }
                   } else {
                     // Try CBOR as fallback
@@ -828,7 +872,12 @@ export default function Home() {
               }
               break;
             default:
-              content = <span className="text-[#E0E0E0]">{entry.text}</span>;
+              // Check if this entry contains HTML (from formatted metadata)
+              if (entry.text.includes('<span') && entry.text.includes('</span>')) {
+                content = <span className="text-[#E0E0E0] whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: entry.text }} />;
+              } else {
+                content = <span className="text-[#E0E0E0]">{entry.text}</span>;
+              }
           }
           
           return (
