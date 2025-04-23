@@ -30,22 +30,12 @@ export default function Home() {
   const consoleRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // Keep the console scrolled to the bottom
+  // Focus input when content changes
   useEffect(() => {
-    // Scroll immediately
-    if (consoleRef.current) {
-      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    if (inputRef.current && !isProcessing) {
+      inputRef.current.focus();
     }
-    
-    // Also scroll after a slight delay to ensure all DOM updates are complete
-    const scrollTimer = setTimeout(() => {
-      if (consoleRef.current) {
-        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-      }
-    }, 10);
-    
-    return () => clearTimeout(scrollTimer);
-  }, [consoleEntries]);
+  }, [consoleEntries, isProcessing]);
   
   // Focus the input when the component mounts and auto-detect mode
   useEffect(() => {
@@ -145,11 +135,9 @@ export default function Home() {
   const appendToConsole = (text: string, type: ConsoleEntryType = "default") => {
     setConsoleEntries(prev => [...prev, { text, type }]);
     
-    // Force scroll to bottom after a short delay
+    // Make sure the window scrolls to the bottom
     setTimeout(() => {
-      if (consoleRef.current) {
-        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-      }
+      window.scrollTo(0, document.body.scrollHeight);
     }, 50);
   };
   
@@ -1349,14 +1337,14 @@ OCI <district_number> : Resolves the specific district's sat number`,
   };
   
   return (
-    <div className="bg-[#1E1E1E] text-[#E0E0E0] font-mono h-screen flex flex-col">
+    <div className="bg-[#1E1E1E] text-[#E0E0E0] font-mono min-h-screen flex flex-col">
       {/* Console Output */}
       <div
         ref={consoleRef}
-        className="flex-1 p-4 overflow-y-auto"
+        className="w-full p-4"
         style={{
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#555 #1E1E1E'
+          overflowY: 'visible',
+          minHeight: 'calc(100vh - 40px)'
         }}
       >
         {consoleEntries.map((entry, index) => {
