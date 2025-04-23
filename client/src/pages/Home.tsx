@@ -61,7 +61,8 @@ export default function Home() {
       // Check not just if response is ok, but also that we can get actual data
       if (ordResponse.ok) {
         const data = await ordResponse.text();
-        if (data && data.trim() !== "") {
+        // Verify we got a valid Unix timestamp (numeric response)
+        if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
           ordModeWorks = true;
           appendToConsole("Local ORD server detected!", "success");
         }
@@ -80,7 +81,8 @@ export default function Home() {
       
       if (webResponse.ok) {
         const data = await webResponse.text();
-        if (data && data.trim() !== "") {
+        // Verify we got a valid Unix timestamp (numeric response)
+        if (data && data.trim() !== "" && !isNaN(Number(data.trim()))) {
           webModeWorks = true;
           appendToConsole("Web connectivity detected!", "success");
         }
@@ -192,7 +194,6 @@ export default function Home() {
       // Ordinals section with different color
       appendToConsole("Ordinals Recursive Endpoints:", "success");
       appendToConsole("BLOCK - Retrieve block information", "default");
-      appendToConsole("BLOCKTIME - Get current block time", "default");
       appendToConsole("INSCRIPTION - Query inscription data", "default");
       appendToConsole("SAT - Get information about specific satoshis", "default");
       appendToConsole("TRANSACTION - Query transaction data", "default");
@@ -243,6 +244,30 @@ export default function Home() {
       let url;
       let response;
       let data;
+      
+      // Check for BLOCKTIME or BLOCK TIME command
+      if (args.length > 0 && (args[0].toUpperCase() === "TIME" || args[0].toUpperCase() === "BLOCKTIME")) {
+        url = `${baseUrl}/r/blocktime`;
+        appendToConsole(`Fetching current block time from: ${url}`, "default");
+        
+        response = await fetch(url, { cache: 'no-store' });
+        
+        if (!response.ok) {
+          appendToConsole(`Error: Server responded with status ${response.status}`, "error");
+          return;
+        }
+        
+        const blockTime = await response.text();
+        // Check if the response is a valid Unix timestamp (numeric)
+        if (!isNaN(Number(blockTime.trim()))) {
+          // Convert to readable date too
+          const date = new Date(Number(blockTime.trim()) * 1000);
+          appendToConsole(`Current block time: ${blockTime} (${date.toISOString()})`, "success");
+        } else {
+          appendToConsole(`Current block time: ${blockTime}`, "success");
+        }
+        return;
+      }
       
       // If no arguments, get the latest block info
       if (args.length === 0) {
@@ -521,32 +546,7 @@ export default function Home() {
     }
   };
   
-  const handleBlockTime = async () => {
-    setIsProcessing(true);
-    
-    try {
-      const url = `${baseUrl}/r/blocktime`;
-      appendToConsole(`Fetching current block time from: ${url}`, "default");
-      
-      const response = await fetch(url, { cache: 'no-store' });
-      
-      if (!response.ok) {
-        appendToConsole(`Error: Server responded with status ${response.status}`, "error");
-        return;
-      }
-      
-      const blockTime = await response.text();
-      appendToConsole(`Current block time: ${blockTime}`, "success");
-    } catch (error) {
-      if (error instanceof Error) {
-        appendToConsole(`Error: ${error.message}`, "error");
-      } else {
-        appendToConsole("An unknown error occurred", "error");
-      }
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+
   
   const handleClear = () => {
     setConsoleEntries([]);
@@ -570,17 +570,12 @@ MODE ORD : switches to ORD mode, without prefix (requires local ord server)`,
     },
     BLOCK: {
       description: "Retrieve block information.",
-      usage: "BLOCK [<hash or height>]",
+      usage: "BLOCK [<hash or height>|TIME]",
       details: 
 `BLOCK : get latest block info
-BLOCK <hash/height> : get block info at specified HASH or HEIGHT`,
+BLOCK <hash/height> : get block info at specified HASH or HEIGHT
+BLOCK TIME : shows the current block time (unix timestamp)`,
       handler: handleBlock
-    },
-    BLOCKTIME: {
-      description: "Get current block time.",
-      usage: "BLOCKTIME",
-      details: "Shows the current block time using the /r/blocktime recursive endpoint.",
-      handler: handleBlockTime
     },
     INSCRIPTION: {
       description: "Query inscription data.",
@@ -624,6 +619,12 @@ INSCRIPTION <inscription_id> CHILDREN : Returns inscription CHILDREN`,
   const processCommand = (commandStr: string) => {
     const parts = commandStr.trim().split(' ');
     const primaryCommand = parts[0].toUpperCase();
+    
+    // Handle BLOCKTIME command separately (route to BLOCK TIME)
+    if (primaryCommand === "BLOCKTIME") {
+      commands["BLOCK"].handler(["TIME"]);
+      return;
+    }
     
     if (primaryCommand in commands) {
       commands[primaryCommand as keyof typeof commands].handler(parts.slice(1));
